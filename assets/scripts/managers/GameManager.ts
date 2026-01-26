@@ -63,6 +63,8 @@ export class GameManager extends Component {
   private _remainingHighlights: number = 0;
   /** 高亮泡泡索引集合 */
   private _highlightIndices: Set<number> = new Set();
+  /** 原始高亮泡泡索引数组（顺序模式使用，不会被修改） */
+  private _originalHighlightIndices: number[] = [];
   /** 上一关的高亮数量（用于保证递增） */
   private _lastHighlightCount: number = 0;
 
@@ -191,6 +193,7 @@ export class GameManager extends Component {
 
     // 设置关卡信息
     this._highlightIndices = new Set(result.highlightIndices);
+    this._originalHighlightIndices = [...result.highlightIndices];
     this._remainingHighlights = result.highlightCount;
     this._lastHighlightCount = result.highlightCount;
     this._currentClickIndex = 0;
@@ -483,10 +486,15 @@ export class GameManager extends Component {
 
     switch (this._currentMode) {
       case GameMode.CLASSIC:
-      case GameMode.MEMORY:
+        // 经典模式：泡泡必须是高亮类型且在高亮索引中
         isCorrect = isHighlight && this._highlightIndices.has(positionIndex);
         break;
+      case GameMode.MEMORY:
+        // 记忆模式：所有泡泡都显示为普通类型，只根据位置索引判定
+        isCorrect = this._highlightIndices.has(positionIndex);
+        break;
       case GameMode.SEQUENCE:
+        // 顺序模式：按顺序点击，使用位置索引判定
         isCorrect = this.checkSequenceClick(positionIndex);
         break;
     }
@@ -507,8 +515,8 @@ export class GameManager extends Component {
     }
 
     const expectedHighlightIndex = this._expectedClickOrder[this._currentClickIndex];
-    const highlightArray = Array.from(this._highlightIndices);
-    const expectedPositionIndex = highlightArray[expectedHighlightIndex];
+    // 使用原始高亮索引数组（不会随点击而改变）
+    const expectedPositionIndex = this._originalHighlightIndices[expectedHighlightIndex];
 
     return positionIndex === expectedPositionIndex;
   }

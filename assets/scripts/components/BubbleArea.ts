@@ -148,8 +148,10 @@ export class BubbleArea extends Component {
     this.initGameMode();
 
     // 返回生成结果
+    // 注意：highlightIndices 必须使用生成器的 highlightPositions 顺序，
+    // 因为 clickOrder 是基于 highlightPositions 数组索引的
     return {
-      highlightIndices: this._highlightBubbles.map(b => b.index),
+      highlightIndices: this._generateResult.highlightPositions.map(p => p.index),
       clickOrder: this._generateResult?.clickOrder,
       highlightCount: this._highlightBubbles.length,
     };
