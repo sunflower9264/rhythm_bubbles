@@ -21,7 +21,7 @@
 ## 📸 游戏截图
 
 ### 主菜单界面
-![Main Menu](docs/ScreenShot_2026-01-26_224231_452.png)
+![Main Menu](docs/ScreenShot_2026-01-26_235517_609.png)
 
 ### 游戏界面
 ![Game Scene](docs/ScreenShot_2026-01-26_224241_632.png)

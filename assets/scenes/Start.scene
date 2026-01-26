@@ -374,7 +374,7 @@
     "__prefab": null,
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 408.87,
+      "width": 498.8867873703868,
       "height": 151.2
     },
     "_anchorPoint": {
@@ -404,7 +404,7 @@
       "b": 91,
       "a": 255
     },
-    "_string": "TapTap",
+    "_string": "Bubbles",
     "_horizontalAlign": 1,
     "_verticalAlign": 1,
     "_actualFontSize": 120,
@@ -416,7 +416,7 @@
     "_font": null,
     "_isSystemFontUsed": true,
     "_spacingX": 0,
-    "_isItalic": false,
+    "_isItalic": true,
     "_isBold": true,
     "_isUnderline": false,
     "_underlineHeight": 2,
