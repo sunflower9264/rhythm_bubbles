@@ -41,6 +41,7 @@ export class LoadingManager extends Component {
   private _targetProgress: number = 0;
   private _isLoadingComplete: boolean = false;
   private _loadingStartTime: number = 0;
+  private _isSceneLoading: boolean = false; // 防止重复加载场景
 
   // ========== 生命周期 ==========
   protected onLoad(): void {
@@ -122,11 +123,17 @@ export class LoadingManager extends Component {
    * 检查并进入游戏场景
    */
   private checkAndEnterGame(): void {
+    // 防止重复调用
+    if (this._isSceneLoading) return;
+
     const elapsedTime = (Date.now() - this._loadingStartTime) / 1000;
 
     if (elapsedTime >= this.minLoadingTime) {
+      this._isSceneLoading = true;
       this.onLoadingComplete();
     } else {
+      // 标记为正在加载，防止 update 中再次触发
+      this._isSceneLoading = true;
       // 延迟到最小加载时间后进入
       this.scheduleOnce(() => {
         this.onLoadingComplete();
