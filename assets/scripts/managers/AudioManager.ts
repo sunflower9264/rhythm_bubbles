@@ -290,10 +290,10 @@ export class AudioManager extends Component {
   public setBGMEnabled(enabled: boolean): void {
     this._config.bgmEnabled = enabled;
     if (!enabled) {
+      // 关闭时暂停正在播放的音乐
       this.pauseBGM();
-    } else {
-      this.resumeBGM();
     }
+    // 开启时不自动播放，只是允许后续播放
     this.saveConfig();
   }
 
