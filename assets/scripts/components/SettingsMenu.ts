@@ -5,8 +5,8 @@
  * @date 2026-01-26
  */
 
-import { _decorator, Component, Node, Button, Slider, Toggle, log } from 'cc';
-import { AudioManager, SFXType } from '../managers/AudioManager';
+import { _decorator, Component, Node, Button, Slider, log } from 'cc';
+import { AudioManager } from '../managers/AudioManager';
 
 const { ccclass, property } = _decorator;
 
@@ -27,12 +27,6 @@ export class SettingsMenu extends Component {
 
   @property({ type: Slider, tooltip: '音效音量滑动条' })
   private sliderSFXVolume: Slider = null;
-
-  @property({ type: Toggle, tooltip: 'BGM开关' })
-  private toggleBGM: Toggle = null;
-
-  @property({ type: Toggle, tooltip: '音效开关' })
-  private toggleSFX: Toggle = null;
 
   @property({ type: Button, tooltip: '返回按钮' })
   private btnBack: Button = null;
@@ -89,16 +83,6 @@ export class SettingsMenu extends Component {
       this.sliderSFXVolume.node.on('slide', this.onSFXVolumeChanged, this);
     }
 
-    // BGM开关
-    if (this.toggleBGM) {
-      this.toggleBGM.node.on('toggle', this.onBGMToggleChanged, this);
-    }
-
-    // 音效开关
-    if (this.toggleSFX) {
-      this.toggleSFX.node.on('toggle', this.onSFXToggleChanged, this);
-    }
-
     // 返回按钮
     if (this.btnBack) {
       this.btnBack.node.on(Button.EventType.CLICK, this.onBackClick, this);
@@ -128,16 +112,6 @@ export class SettingsMenu extends Component {
     if (this.sliderSFXVolume) {
       this.sliderSFXVolume.progress = audioManager.getSFXVolume();
     }
-
-    // 同步BGM开关
-    if (this.toggleBGM) {
-      this.toggleBGM.isChecked = audioManager.isBGMEnabled();
-    }
-
-    // 同步音效开关
-    if (this.toggleSFX) {
-      this.toggleSFX.isChecked = audioManager.isSFXEnabled();
-    }
   }
 
   // ========== 事件回调 ==========
@@ -158,29 +132,6 @@ export class SettingsMenu extends Component {
     const volume = slider.progress;
     AudioManager.instance?.setSFXVolume(volume);
     log(`[SettingsMenu] 音效音量: ${Math.round(volume * 100)}%`);
-  }
-
-  /**
-   * BGM开关变化
-   */
-  private onBGMToggleChanged(toggle: Toggle): void {
-    const enabled = toggle.isChecked;
-    AudioManager.instance?.setBGMEnabled(enabled);
-    log(`[SettingsMenu] BGM开关: ${enabled ? '开' : '关'}`);
-  }
-
-  /**
-   * 音效开关变化
-   */
-  private onSFXToggleChanged(toggle: Toggle): void {
-    const enabled = toggle.isChecked;
-    AudioManager.instance?.setSFXEnabled(enabled);
-    log(`[SettingsMenu] 音效开关: ${enabled ? '开' : '关'}`);
-
-    // 播放一个音效作为反馈
-    if (enabled) {
-      AudioManager.instance?.playSFX(SFXType.BUBBLE_PRESS);
-    }
   }
 
   /**

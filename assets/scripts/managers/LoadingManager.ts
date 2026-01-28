@@ -103,12 +103,22 @@ export class LoadingManager extends Component {
   private updateProgressBar(dt: number): void {
     if (!this._progressBarTransform) return;
 
-    // 平滑插值到目标进度
-    const lerpSpeed = 5;
-    this._currentProgress += (this._targetProgress - this._currentProgress) * lerpSpeed * dt;
+    // 计算差值
+    const diff = this._targetProgress - this._currentProgress;
+
+    // 当差值很小时直接设置为目标值，避免卡在最后
+    if (Math.abs(diff) < 0.01) {
+      this._currentProgress = this._targetProgress;
+    } else {
+      // 使用固定速度 + 比例速度混合，确保接近目标时不会太慢
+      const minSpeed = 0.2; // 最小速度
+      const lerpSpeed = 5;
+      const speed = Math.max(minSpeed, Math.abs(diff) * lerpSpeed);
+      this._currentProgress += Math.sign(diff) * speed * dt;
+    }
 
     // 限制进度范围
-    this._currentProgress = Math.min(this._currentProgress, 1);
+    this._currentProgress = Math.min(Math.max(this._currentProgress, 0), 1);
 
     // 更新进度条宽度
     this._progressBarTransform.width = this._currentProgress * this.progressBarMaxWidth;
