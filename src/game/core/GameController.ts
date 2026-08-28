@@ -1,4 +1,5 @@
 import { GameSession } from './GameSession';
+import type { RandomSource } from './level';
 import type { GameMode, SessionSnapshot, SessionUpdate } from './types';
 
 export interface Preferences {
@@ -12,7 +13,7 @@ export interface Preferences {
 type Listener = (update: SessionUpdate, preferences: Preferences) => void;
 
 const PREFERENCES_KEY = 'rhythm-bubbles:preferences:v2';
-const BEST_SCORES_KEY = 'rhythm-bubbles:best-scores:v2';
+const BEST_SCORE_KEY = 'rhythm-bubbles:best-run:v3';
 
 const DEFAULT_PREFERENCES: Preferences = {
   sound: true,
@@ -23,14 +24,14 @@ const DEFAULT_PREFERENCES: Preferences = {
 };
 
 export class GameController {
-  private readonly session = new GameSession();
+  private readonly session: GameSession;
   private readonly listeners = new Set<Listener>();
   private preferences = this.readStorage<Preferences>(PREFERENCES_KEY, DEFAULT_PREFERENCES);
-  private bestScores = this.readStorage<Record<GameMode, number>>(BEST_SCORES_KEY, {
-    classic: 0,
-    memory: 0,
-    sequence: 0,
-  });
+  private bestScore = this.readStorage<number>(BEST_SCORE_KEY, 0);
+
+  constructor(random?: RandomSource) {
+    this.session = new GameSession(random);
+  }
 
   subscribe(listener: Listener): () => void {
     this.listeners.add(listener);
@@ -38,12 +39,16 @@ export class GameController {
     return () => this.listeners.delete(listener);
   }
 
-  start(mode: GameMode): void {
-    this.commit(this.session.start(mode));
+  start(_mode?: GameMode): void {
+    this.commit(this.session.start());
   }
 
   select(index: number): void {
     this.commit(this.session.select(index));
+  }
+
+  selectReward(index: number): void {
+    this.commit(this.session.selectReward(index));
   }
 
   tick(milliseconds: number): void {
@@ -82,22 +87,25 @@ export class GameController {
     this.commit({ snapshot: this.session.getSnapshot(), effect: 'none' });
   }
 
-  getBestScore(mode: GameMode): number {
-    return this.bestScores[mode] ?? 0;
+  getBestScore(): number {
+    return this.bestScore;
   }
 
   private commit(update: SessionUpdate): void {
     const { snapshot } = update;
-    if (snapshot.phase === 'game-over' && snapshot.mode) {
-      const previousBest = this.bestScores[snapshot.mode] ?? 0;
-      if (snapshot.score > previousBest) {
-        this.bestScores = { ...this.bestScores, [snapshot.mode]: snapshot.score };
-        this.writeStorage(BEST_SCORES_KEY, this.bestScores);
-      }
+    if (['game-over', 'victory'].includes(snapshot.phase) && snapshot.score > this.bestScore) {
+      this.bestScore = snapshot.score;
+      this.writeStorage(BEST_SCORE_KEY, this.bestScore);
     }
 
-    if (update.effect === 'correct' && this.preferences.haptics) this.vibrate(12);
-    if (update.effect === 'wrong' && this.preferences.haptics) this.vibrate([16, 24, 16]);
+    if (update.effect === 'correct' && this.preferences.haptics) this.vibrate(10);
+    if (update.effect === 'board-clear' && this.preferences.haptics) this.vibrate(14);
+    if (update.effect === 'encounter-win' && this.preferences.haptics) this.vibrate([18, 22, 30]);
+    if (update.effect === 'enemy-windup' && this.preferences.haptics) this.vibrate([8, 28, 8]);
+    if (['enemy-impact', 'timeout-impact'].includes(update.effect) && this.preferences.haptics) this.vibrate([24, 18, 38]);
+    if (update.effect === 'enemy-staggered' && this.preferences.haptics) this.vibrate([10, 10, 18]);
+    if (update.effect === 'mistake' && this.preferences.haptics) this.vibrate([16, 20, 16]);
+    if (update.effect === 'mistake-overflow' && this.preferences.haptics) this.vibrate([20, 16, 28]);
 
     for (const listener of this.listeners) listener(update, this.getPreferences());
   }
@@ -113,7 +121,12 @@ export class GameController {
   private readStorage<T>(key: string, fallback: T): T {
     try {
       const value = localStorage.getItem(key);
-      return value ? { ...fallback, ...JSON.parse(value) } : fallback;
+      if (!value) return fallback;
+      const parsed: unknown = JSON.parse(value);
+      if (typeof fallback === 'number') {
+        return (typeof parsed === 'number' && Number.isFinite(parsed) ? parsed : fallback) as T;
+      }
+      return parsed && typeof parsed === 'object' ? { ...fallback, ...parsed } : fallback;
     } catch {
       return fallback;
     }

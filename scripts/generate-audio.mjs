@@ -172,6 +172,41 @@ makeSfx('countdown.wav', 0.18, (buffer) => {
   addTone(buffer, 0.015, 0.12, 1320, 0.08, 'triangle');
 });
 
+makeSfx('enemy-hit.wav', 0.42, (buffer) => {
+  addTone(buffer, 0, 0.12, 246.94, 0.34, 'triangle', -0.42);
+  addTone(buffer, 0.035, 0.2, 493.88, 0.2, 'sine', -0.18);
+  addNoise(buffer, 0.01, 0.055, 0.08);
+});
+
+makeSfx('enemy-attack.wav', 0.62, (buffer) => {
+  addTone(buffer, 0, 0.26, 164.81, 0.32, 'triangle', -0.5);
+  addTone(buffer, 0.08, 0.32, 110, 0.24, 'sine', -0.24);
+  addNoise(buffer, 0.02, 0.16, 0.11);
+});
+
+makeSfx('shield-break.wav', 0.76, (buffer) => {
+  addTone(buffer, 0, 0.24, 148, 0.32, 'sine', -0.58);
+  addTone(buffer, 0.012, 0.3, 296, 0.18, 'triangle', -0.42);
+  addNoise(buffer, 0.018, 0.19, 0.13);
+  [1760, 2240, 2816, 3360, 4192, 4864].forEach((frequency, index) => {
+    const start = 0.055 + index * 0.043;
+    addTone(buffer, start, 0.22 + (index % 2) * 0.05, frequency, 0.12 - index * 0.009, 'sine', -0.38);
+    addPercussionNoise(buffer, start, 0.12, 0.045, 900 + index * 37, 31 + index * 2);
+  });
+  addTone(buffer, 0.3, 0.34, 988, 0.08, 'triangle', -0.5);
+});
+
+makeSfx('victory.wav', 1.55, (buffer) => {
+  const notes = [523.25, 659.25, 783.99, 1046.5, 1318.51];
+  notes.forEach((frequency, index) => {
+    addTone(buffer, index * 0.17, 0.5, frequency, 0.27, index % 2 ? 'triangle' : 'sine');
+    addTone(buffer, index * 0.17 + 0.025, 0.58, frequency * 2, 0.05, 'sine');
+  });
+  addTone(buffer, 0.86, 0.62, 523.25, 0.1, 'triangle');
+  addTone(buffer, 0.86, 0.62, 659.25, 0.1, 'triangle');
+  addTone(buffer, 0.86, 0.62, 783.99, 0.1, 'triangle');
+});
+
 const bpm = 120;
 const beat = 60 / bpm;
 const bars = 8;

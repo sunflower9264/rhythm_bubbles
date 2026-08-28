@@ -36,8 +36,8 @@ export function createLevelConfig(
     cols,
     targetCount,
     timeLimitMs: (targetCount * 2 + extraSeconds) * 1000,
-    flashCount: 3,
-    flashDurationMs: 300,
+    flashCount: 1,
+    flashDurationMs: 900,
     sequenceIntervalMs: 300,
   };
 }
@@ -54,12 +54,15 @@ export function createBubbles(config: LevelConfig, random: RandomSource): Bubble
   }
 
   const orderByIndex = new Map(targetIndices.map((index, order) => [index, order]));
-  return Array.from({ length: total }, (_, index) => ({
-    index,
-    row: Math.floor(index / config.cols),
-    col: index % config.cols,
-    isTarget: orderByIndex.has(index),
-    cleared: false,
-    order: orderByIndex.get(index) ?? null,
-  }));
+  return Array.from({ length: total }, (_, index) => {
+    const order = orderByIndex.get(index) ?? null;
+    return {
+      index,
+      row: Math.floor(index / config.cols),
+      col: index % config.cols,
+      isTarget: order !== null,
+      cleared: false,
+      order,
+    };
+  });
 }

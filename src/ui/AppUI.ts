@@ -2,10 +2,11 @@ import { GameController, type Preferences } from '../game/core/GameController';
 import type { GameMode, SessionSnapshot, SessionUpdate } from '../game/core/types';
 
 const MODE_LABEL: Record<GameMode, string> = {
-  classic: '寻光模式',
-  memory: '记忆模式',
-  sequence: '旋律模式',
+  classic: '寻光',
+  memory: '记忆',
+  sequence: '旋律',
 };
+const BATTLE_LABEL = ['寻光', '记忆', '旋律', '旋律', '旋律'];
 
 export class AppUI {
   private readonly root: HTMLElement;
@@ -13,6 +14,11 @@ export class AppUI {
   private latestSnapshot!: SessionSnapshot;
   private gameOverRevealPending = false;
   private gameOverRevealTimer?: number;
+  private lastEnemyHealthRatio = -1;
+  private lastPlayerHealthRatio = -1;
+  private playerDamageTimer?: number;
+  private comboPunchTimer?: number;
+  private comboImpactTimer?: number;
 
   constructor(private readonly controller: GameController, root: HTMLElement) {
     this.root = root;
@@ -22,18 +28,22 @@ export class AppUI {
   }
 
   private bindEvents(): void {
-    this.root.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach((button) => {
-      button.addEventListener('click', () => this.controller.start(button.dataset.mode as GameMode));
-    });
+    this.onClick('#start-game', () => this.controller.start());
     this.onClick('#pause-button', () => this.controller.pause());
     this.onClick('#resume-button', () => this.controller.resume());
     this.onClick('#restart-button', () => this.controller.restart());
     this.onClick('#gameover-restart', () => this.controller.restart());
+    this.onClick('#victory-restart', () => this.controller.restart());
     this.onClick('#pause-home', () => this.controller.home());
     this.onClick('#gameover-home', () => this.controller.home());
+    this.onClick('#victory-home', () => this.controller.home());
     this.onClick('#menu-settings', () => this.openSettings());
     this.onClick('#pause-settings', () => this.openSettings());
     this.onClick('#settings-close', () => this.closeSettings());
+
+    this.root.querySelectorAll<HTMLButtonElement>('[data-reward-index]').forEach((button) => {
+      button.addEventListener('click', () => this.controller.selectReward(Number(button.dataset.rewardIndex)));
+    });
 
     this.root.querySelectorAll<HTMLInputElement>('input[type="checkbox"][data-preference]').forEach((input) => {
       input.addEventListener('change', () => {
@@ -43,6 +53,7 @@ export class AppUI {
     });
     this.get<HTMLInputElement>('#music-volume').addEventListener('input', (event) => {
       const input = event.currentTarget as HTMLInputElement;
+      input.style.setProperty('--volume-progress', `${input.value}%`);
       this.controller.setPreference('musicVolume', Number(input.value) / 100);
     });
 
@@ -51,18 +62,24 @@ export class AppUI {
   private sync(update: SessionUpdate, preferences: Preferences): void {
     const snapshot = update.snapshot;
     this.latestSnapshot = snapshot;
+    const attackWasWeakened = snapshot.lastAttackReduction > 0 && ['enemy-staggered', 'board-clear'].includes(update.effect);
+    if (['start', 'home'].includes(update.effect)) this.clearComboImpact();
     const menu = this.get('#menu-screen');
     const hud = this.get('#hud');
     const pause = this.get('#pause-modal');
     const gameOver = this.get('#gameover-modal');
+    const reward = this.get('#reward-modal');
+    const victory = this.get('#victory-modal');
 
     menu.classList.toggle('is-visible', snapshot.phase === 'menu');
     hud.classList.toggle('is-visible', snapshot.phase !== 'menu');
     pause.classList.toggle('is-visible', snapshot.phase === 'paused');
+    reward.classList.toggle('is-visible', snapshot.phase === 'reward');
+    victory.classList.toggle('is-visible', snapshot.phase === 'victory');
     if (snapshot.phase !== 'game-over') {
       this.clearGameOverReveal();
       gameOver.classList.remove('is-visible');
-    } else if (update.effect === 'wrong' && update.effectIndex !== undefined && !preferences.reducedMotion) {
+    } else if (['mistake', 'counter-miss', 'enemy-impact', 'timeout-impact'].includes(update.effect) && !preferences.reducedMotion) {
       this.clearGameOverReveal();
       this.gameOverRevealPending = true;
       gameOver.classList.remove('is-visible');
@@ -77,26 +94,102 @@ export class AppUI {
     }
     document.body.classList.toggle('reduce-motion', preferences.reducedMotion);
 
-    this.text('#level-value', String(snapshot.level));
     this.text('#score-value', String(snapshot.score).padStart(3, '0'));
     this.text('#time-value', String(Math.max(0, Math.ceil(snapshot.remainingTimeMs / 1000))));
-    this.text('#target-value', String(snapshot.remainingTargets));
-    this.text('#mode-name', snapshot.mode ? MODE_LABEL[snapshot.mode] : '');
+    this.text('#attack-value', String(snapshot.attackPower));
+    this.text('#battle-value', `${snapshot.battle}/${snapshot.totalBattles}`);
+    this.text('#enemy-name', snapshot.enemyName);
+    this.text('#enemy-health-value', `${snapshot.enemyHp}/${snapshot.maxEnemyHp}`);
+    this.text('#player-health-value', String(snapshot.playerHp));
+    this.text('#player-max-health', String(snapshot.maxPlayerHp));
+    this.text('#shield-value', snapshot.shield > 0 ? `护盾 ${snapshot.shield}` : '无护盾');
+    this.text('#mistake-value', `失误 ${Math.min(snapshot.mistakeCount, snapshot.mistakeLimit)}/${snapshot.mistakeLimit}`);
+    this.text('#mode-name', snapshot.mode ? `${BATTLE_LABEL[snapshot.battle - 1] ?? MODE_LABEL[snapshot.mode]} · 第${snapshot.battle}战` : '');
     this.text('#gameover-score', String(snapshot.score));
     this.text('#gameover-level', String(snapshot.level));
-    this.text('#gameover-best', snapshot.mode ? String(this.controller.getBestScore(snapshot.mode)) : '0');
+    this.text('#gameover-best', String(this.controller.getBestScore()));
+    this.text('#victory-score', String(snapshot.score));
+    this.text('#victory-health', `${snapshot.playerHp}/${snapshot.maxPlayerHp}`);
+
+    const enemyRatio = snapshot.maxEnemyHp > 0 ? snapshot.enemyHp / snapshot.maxEnemyHp : 0;
+    if (enemyRatio !== this.lastEnemyHealthRatio) {
+      this.get('#enemy-health-fill').style.width = `${Math.max(0, enemyRatio) * 100}%`;
+      this.lastEnemyHealthRatio = enemyRatio;
+    }
+    const playerRatio = snapshot.maxPlayerHp > 0 ? snapshot.playerHp / snapshot.maxPlayerHp : 0;
+    if (playerRatio !== this.lastPlayerHealthRatio) {
+      this.get('#player-health-fill').style.width = `${Math.max(0, playerRatio) * 100}%`;
+      this.lastPlayerHealthRatio = playerRatio;
+    }
+    this.get('#enemy-status').classList.toggle('is-boss', snapshot.enemyIsBoss);
+    this.get('#enemy-status').classList.toggle('is-windup', snapshot.enemyAttackState === 'windup');
+    this.get('#enemy-status').classList.toggle('is-phase-two', snapshot.enemyPhase === 2);
+    this.get('#shield-value').classList.toggle('is-active', snapshot.shield > 0);
+    this.get('#mistake-value').classList.toggle('is-warning', snapshot.mistakeCount >= snapshot.mistakeLimit);
+
+    const comboBurst = this.get('#combo-burst');
+    const comboVisible = snapshot.combo > 1 && !['menu', 'reward', 'game-over', 'victory'].includes(snapshot.phase);
+    this.text('#combo-burst-value', String(snapshot.combo));
+    comboBurst.classList.toggle('is-visible', comboVisible);
+    comboBurst.classList.toggle('is-hot', snapshot.combo >= 5);
+    comboBurst.classList.toggle('is-fever', snapshot.combo >= 8);
+    comboBurst.classList.toggle('is-window-urgent', comboVisible && snapshot.comboRemainingMs <= 350);
+    const comboProgress = snapshot.comboWindowMs > 0 ? snapshot.comboRemainingMs / snapshot.comboWindowMs : 0;
+    comboBurst.style.setProperty('--combo-progress', `${Math.max(0, Math.min(1, comboProgress)) * 100}%`);
 
     const timer = this.get('#timer-fill');
     const timeRatio = snapshot.timeLimitMs > 0 ? snapshot.remainingTimeMs / snapshot.timeLimitMs : 1;
     timer.style.setProperty('--timer-progress', `${Math.max(0, Math.min(1, timeRatio)) * 100}%`);
     timer.classList.toggle('is-urgent', timeRatio <= 0.3 && snapshot.phase === 'playing');
 
+    const attackIntent = this.get('#enemy-attack-intent');
+    const attackFrozen = ['preview', 'paused', 'reward', 'transition'].includes(snapshot.phase);
+    const mechanicLabel = {
+      sequence: snapshot.enemyAttackState === 'windup'
+        ? `吞噬对招 ${snapshot.enemyIntentCursor}/${snapshot.enemyIntentTargets.length}`
+        : snapshot.enemyAttackState === 'recovery' ? '吞噬落空' : '吞噬蓄势',
+      capture: snapshot.enemyAttackState === 'windup' ? '诱灯捕获' : '诱灯蓄能',
+      shell: snapshot.enemyAttackState === 'windup'
+        ? `护壳弱点 ${snapshot.enemyIntentCursor}/${snapshot.enemyIntentTargets.length}`
+        : '护壳冲撞',
+      sweep: snapshot.enemyAttackState === 'windup' && snapshot.enemyHazardRow !== null
+        ? `第 ${snapshot.enemyHazardRow + 1} 排潮汐扫线`
+        : '潮汐蓄势',
+      guard: snapshot.enemyAttackState === 'windup' ? '尖刺反击' : '鼓气蓄刺',
+    }[snapshot.enemyMechanic];
+    const attackLabel = snapshot.enemyHp === 0
+      ? '攻击已停止'
+      : snapshot.enemyAttackState === 'staggered'
+        ? `破势！伤害 ×${snapshot.enemyMechanic === 'shell' ? '1.75' : '1.5'}`
+        : snapshot.enemyAttackState === 'recovery'
+          ? '攻击落空'
+          : attackFrozen ? '攻击暂停' : mechanicLabel;
+    this.text('#enemy-attack-label', attackLabel);
+    this.text('#enemy-attack-damage', ['sequence', 'shell'].includes(snapshot.enemyMechanic)
+      ? `架势 ${snapshot.enemyPoise}/${snapshot.maxEnemyPoise}`
+      : `伤害 ${snapshot.enemyAttack}`);
+    attackIntent.style.setProperty('--attack-progress', `${snapshot.enemyAttackProgress * 100}%`);
+    attackIntent.classList.toggle('is-windup', snapshot.enemyAttackState === 'windup');
+    attackIntent.classList.toggle('is-staggered', snapshot.enemyAttackState === 'staggered');
+    attackIntent.classList.toggle('is-frozen', attackFrozen);
+    attackIntent.classList.toggle('is-broken', snapshot.enemyHp === 0);
+
     const prompt = snapshot.phase === 'preview'
-      ? snapshot.mode === 'memory' ? '看仔细，记住发光的位置' : '看仔细，记住亮起的顺序'
-      : snapshot.phase === 'transition' ? '全部找到啦！'
-        : snapshot.mode === 'classic' ? '找到所有发光泡泡'
-          : snapshot.mode === 'memory' ? '凭记忆找到它们'
-            : '按刚才的顺序点击';
+      ? snapshot.mode === 'memory' ? '看仔细，记住这次发光的位置' : '看仔细，记住所有编号顺序'
+      : snapshot.phase === 'transition' ? snapshot.enemyHp === 0 ? '漂亮一击！' : snapshot.mistakeCount > snapshot.mistakeLimit ? '失误超限，正在更换泡泡' : '下一组泡泡正在出现'
+        : snapshot.phase === 'playing' && snapshot.enemyHp === 0
+          ? `${snapshot.enemyIsBoss ? 'Boss 已破防！清完泡泡完成终结' : '敌人已破防！清完泡泡拿下奖励'} · 剩余 ${snapshot.remainingTargets}`
+        : snapshot.phase === 'playing' && snapshot.enemyAttackState === 'windup'
+          ? {
+            sequence: `目标锁定！按 ${snapshot.enemyIntentTargets.map((_, index) => index + 1).join('→')} 化解吞噬`,
+            capture: '点亮“救”泡泡，切断牵引光',
+            shell: '击破任意“破”弱点，打开护壳',
+            sweep: `避开第 ${(snapshot.enemyHazardRow ?? 0) + 1} 排，从安全行反击`,
+            guard: '停手！等尖刺收回再攻击',
+          }[snapshot.enemyMechanic]
+        : snapshot.mode === 'classic' ? `戳破发光泡泡 · 剩余 ${snapshot.remainingTargets}`
+          : snapshot.mode === 'memory' ? `凭记忆找到它们 · 剩余 ${snapshot.remainingTargets}`
+            : `按刚才的顺序点击 · 剩余 ${snapshot.remainingTargets}`;
     this.text('#play-prompt', prompt);
 
     for (const key of ['sound', 'music', 'haptics', 'reducedMotion'] as const) {
@@ -104,21 +197,49 @@ export class AppUI {
       if (input) input.checked = preferences[key];
     }
     const musicVolume = Math.round(preferences.musicVolume * 100);
-    this.get<HTMLInputElement>('#music-volume').value = String(musicVolume);
+    const musicVolumeInput = this.get<HTMLInputElement>('#music-volume');
+    musicVolumeInput.value = String(musicVolume);
+    musicVolumeInput.style.setProperty('--volume-progress', `${musicVolume}%`);
     this.text('#music-volume-value', `${musicVolume}%`);
 
-    for (const mode of ['classic', 'memory', 'sequence'] as GameMode[]) {
-      this.text(`#best-${mode}`, String(this.controller.getBestScore(mode)));
-    }
+    this.text('#best-run', String(this.controller.getBestScore()));
+
+    snapshot.rewardChoices.forEach((choice, index) => {
+      this.text(`#reward-icon-${index}`, choice.icon);
+      this.text(`#reward-title-${index}`, choice.title);
+      this.text(`#reward-description-${index}`, choice.description);
+    });
 
     if (update.effect === 'start') this.get('#level-toast').classList.remove('is-active');
-    if (update.effect === 'level-up') this.flashToast(`第 ${snapshot.level + (snapshot.phase === 'transition' ? 1 : 0)} 关`);
+    if (update.effect === 'encounter-win' && !preferences.reducedMotion) this.triggerFinisherImpact();
+    if (['enemy-impact', 'timeout-impact'].includes(update.effect) && !preferences.reducedMotion) this.triggerEnemyImpact();
+    if (snapshot.lastEnemyDamage > 0 && ['mistake', 'counter-miss', 'mistake-overflow', 'enemy-impact', 'timeout-impact'].includes(update.effect)) this.triggerPlayerDamage();
+    if (snapshot.combo > 1 && ['correct', 'enemy-staggered', 'enemy-countered', 'enemy-break', 'board-clear', 'encounter-win'].includes(update.effect)) this.triggerComboPunch();
+    if (attackWasWeakened) {
+      this.triggerAttackWeakened();
+      const reductionPercent = Math.round(snapshot.lastAttackReduction * 1000) / 10;
+      if (snapshot.combo > 1) this.showComboImpact(`连击破势 · 蓄力 -${reductionPercent}%`);
+    }
+    if (update.effect === 'mistake') this.announce(`点错泡泡，损失 ${snapshot.lastEnemyDamage} 点生命`);
+    if (update.effect === 'counter-miss') this.announce(`机制应对失败，损失 ${snapshot.lastEnemyDamage} 点生命`);
+    if (update.effect === 'enemy-countered' && snapshot.enemyAttackState === 'charging') {
+      this.flashToast(snapshot.enemyMechanic === 'capture' || snapshot.enemyMechanic === 'sweep'
+        ? '反制成功！'
+        : `化解成功 · 架势 ${snapshot.enemyPoise}/${snapshot.maxEnemyPoise}`);
+    }
+    if (update.effect === 'enemy-break') this.flashToast(`破势！伤害 ×${snapshot.enemyMechanic === 'shell' ? '1.75' : '1.5'}`);
+    if (update.effect === 'mistake-overflow') {
+      this.flashToast('失误超限 · 更换泡泡');
+      this.announce('失误超过三次，正在生成新一轮泡泡');
+    }
+    if (update.effect === 'reward-picked') this.flashToast(snapshot.enemyIsBoss ? 'Boss 战' : `第 ${snapshot.battle} 战`);
     if (update.effect === 'start') this.announce(`${snapshot.mode ? MODE_LABEL[snapshot.mode] : ''}开始`);
-    if (update.effect === 'wrong') this.announce('本轮结束');
+    if (['mistake', 'counter-miss', 'enemy-impact', 'timeout-impact'].includes(update.effect) && snapshot.phase === 'game-over') this.announce('挑战失败');
+    if (update.effect === 'victory') this.announce('挑战成功');
   }
 
   private openSettings(): void {
-    this.settingsPausedGame = ['playing', 'preview'].includes(this.latestSnapshot.phase);
+    this.settingsPausedGame = ['playing', 'preview', 'transition'].includes(this.latestSnapshot.phase);
     if (this.settingsPausedGame) this.controller.pause();
     this.get('#settings-modal').classList.add('is-visible');
     this.get<HTMLButtonElement>('#settings-close').focus();
@@ -135,6 +256,60 @@ export class AppUI {
     toast.textContent = message;
     toast.classList.remove('is-active');
     requestAnimationFrame(() => toast.classList.add('is-active'));
+  }
+
+  private triggerFinisherImpact(): void {
+    const shell = this.root.closest('#game-shell');
+    if (!shell) return;
+    shell.classList.remove('is-finisher-impact');
+    requestAnimationFrame(() => shell.classList.add('is-finisher-impact'));
+    window.setTimeout(() => shell.classList.remove('is-finisher-impact'), 260);
+  }
+
+  private triggerEnemyImpact(): void {
+    const shell = this.root.closest('#game-shell');
+    if (!shell) return;
+    shell.classList.remove('is-enemy-impact');
+    requestAnimationFrame(() => shell.classList.add('is-enemy-impact'));
+    window.setTimeout(() => shell.classList.remove('is-enemy-impact'), 300);
+  }
+
+  private triggerAttackWeakened(): void {
+    const attackIntent = this.get('#enemy-attack-intent');
+    attackIntent.classList.remove('is-weakened');
+    requestAnimationFrame(() => attackIntent.classList.add('is-weakened'));
+    window.setTimeout(() => attackIntent.classList.remove('is-weakened'), 460);
+  }
+
+  private triggerPlayerDamage(): void {
+    const vital = this.get('.player-vital');
+    if (this.playerDamageTimer !== undefined) window.clearTimeout(this.playerDamageTimer);
+    vital.classList.remove('is-damaged');
+    requestAnimationFrame(() => vital.classList.add('is-damaged'));
+    this.playerDamageTimer = window.setTimeout(() => vital.classList.remove('is-damaged'), 460);
+  }
+
+  private triggerComboPunch(): void {
+    const combo = this.get('#combo-burst');
+    if (this.comboPunchTimer !== undefined) window.clearTimeout(this.comboPunchTimer);
+    combo.classList.remove('is-punch');
+    requestAnimationFrame(() => combo.classList.add('is-punch'));
+    this.comboPunchTimer = window.setTimeout(() => combo.classList.remove('is-punch'), 260);
+  }
+
+  private showComboImpact(message: string): void {
+    const impact = this.get('#combo-impact');
+    if (this.comboImpactTimer !== undefined) window.clearTimeout(this.comboImpactTimer);
+    impact.textContent = message;
+    impact.classList.remove('is-visible');
+    requestAnimationFrame(() => impact.classList.add('is-visible'));
+    this.comboImpactTimer = window.setTimeout(() => impact.classList.remove('is-visible'), 720);
+  }
+
+  private clearComboImpact(): void {
+    if (this.comboImpactTimer !== undefined) window.clearTimeout(this.comboImpactTimer);
+    this.comboImpactTimer = undefined;
+    this.get('#combo-impact').classList.remove('is-visible');
   }
 
   private clearGameOverReveal(): void {
@@ -164,33 +339,17 @@ export class AppUI {
   private template(): string {
     return `
       <section id="menu-screen" class="screen menu-screen is-visible" aria-label="主菜单">
-        <div class="menu-topbar">
-          <button id="menu-settings" class="icon-button" type="button" aria-label="打开设置">⚙</button>
-        </div>
         <header class="brand-block">
           <div class="mascot-badge"><img src="art/icon-192.png" alt="微笑的蓝色泡泡角色"></div>
           <p class="eyebrow">一眼 · 一记 · 一触</p>
           <h1><span>泡泡</span>节拍</h1>
-          <p class="tagline">让眼睛记住，让手指回答。</p>
+          <p class="tagline">让眼睛记住，让泡泡替你战斗。</p>
         </header>
-        <div class="mode-list" aria-label="选择模式">
-          <button id="mode-classic" class="mode-card mode-card--classic" data-mode="classic" type="button">
-            <span class="mode-orbit" aria-hidden="true"><i></i><i></i><i></i></span>
-            <span class="mode-copy"><strong>寻光模式</strong><small>看见发光，就把它点亮</small></span>
-            <span class="mode-meta">最佳 <b id="best-classic">0</b></span><span class="mode-arrow">→</span>
-          </button>
-          <button id="mode-memory" class="mode-card mode-card--memory" data-mode="memory" type="button">
-            <span class="mode-orbit" aria-hidden="true"><i></i><i></i><i></i></span>
-            <span class="mode-copy"><strong>记忆模式</strong><small>泡泡熄灭后，找回它们</small></span>
-            <span class="mode-meta">最佳 <b id="best-memory">0</b></span><span class="mode-arrow">→</span>
-          </button>
-          <button id="mode-sequence" class="mode-card mode-card--sequence" data-mode="sequence" type="button">
-            <span class="mode-orbit" aria-hidden="true"><i></i><i></i><i></i></span>
-            <span class="mode-copy"><strong>旋律模式</strong><small>记住次序，一颗颗回应</small></span>
-            <span class="mode-meta">最佳 <b id="best-sequence">0</b></span><span class="mode-arrow">→</span>
-          </button>
+        <div class="menu-actions">
+          <button id="start-game" class="primary-button menu-start" type="button">开始游戏</button>
+          <button id="menu-settings" class="menu-utility-button" type="button"><span aria-hidden="true">⚙</span>游戏设置</button>
         </div>
-        <p class="menu-hint">轻触泡泡，开始你的节拍挑战</p>
+        <span id="best-run" class="sr-only">0</span>
       </section>
 
       <section id="hud" class="hud" aria-label="游戏状态">
@@ -198,16 +357,27 @@ export class AppUI {
           <div class="hud-row">
             <button id="pause-button" class="icon-button icon-button--glass" type="button" aria-label="暂停游戏">Ⅱ</button>
             <div class="mode-pill"><span class="mode-dot"></span><span id="mode-name"></span></div>
-            <div id="timer-fill" class="timer-pill" style="--timer-progress: 100%"><span aria-hidden="true">◷</span><b id="time-value">0</b></div>
+            <div id="timer-fill" class="timer-pill liquid-meter liquid-meter--timer" style="--timer-progress: 100%"><i class="liquid-fill" aria-hidden="true"></i><span aria-hidden="true">◷</span><b id="time-value">0</b></div>
+          </div>
+          <div id="enemy-status" class="enemy-status">
+            <div class="enemy-heading"><span>第 <b id="battle-value">1/5</b> 战</span><strong id="enemy-name">紫莓果冻</strong><em>Boss</em></div>
+            <div class="health-track health-track--enemy liquid-meter"><i id="enemy-health-fill" class="liquid-fill"></i><b id="enemy-health-value">40/40</b></div>
+            <div id="enemy-attack-intent" class="attack-intent" style="--attack-progress: 0%"><span aria-hidden="true"></span><strong id="enemy-attack-label">撞击蓄力</strong><i class="liquid-meter"><b class="liquid-fill"></b></i><em id="enemy-attack-damage">伤害 8</em></div>
           </div>
           <div class="score-strip">
-            <div><small>关卡</small><strong id="level-value">1</strong></div>
+            <div class="player-vital"><small>生命</small><strong><span id="player-health-value">100</span><em>/<span id="player-max-health">100</span></em></strong><i class="health-track health-track--player liquid-meter"><u id="player-health-fill" class="liquid-fill"></u></i></div>
             <div class="score-main"><small>得分</small><strong id="score-value">000</strong></div>
-            <div><small>剩余</small><strong id="target-value">0</strong></div>
+            <div><small>攻击</small><strong id="attack-value">8</strong></div>
           </div>
+          <div class="combat-tags"><span id="shield-value">无护盾</span><span id="mistake-value">失误 0/3</span></div>
           <p id="play-prompt" class="play-prompt"></p>
         </div>
       </section>
+
+      <div id="combo-burst" class="combo-burst" aria-hidden="true">
+        <span><b id="combo-burst-value">2</b><i>HIT</i></span><strong>COMBO</strong>
+        <div class="combo-window liquid-meter"><u class="liquid-fill"></u></div><small id="combo-impact" class="combo-impact"></small>
+      </div>
 
       <div id="level-toast" class="level-toast" aria-hidden="true"></div>
 
@@ -222,11 +392,30 @@ export class AppUI {
 
       <section id="gameover-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="gameover-title">
         <div class="modal-card modal-card--result">
-          <div class="result-face" aria-hidden="true"><span>◡</span></div>
-          <span class="modal-kicker">这一轮完成</span><h2 id="gameover-title">再来一次？</h2>
-          <div class="result-grid"><div><small>得分</small><b id="gameover-score">0</b></div><div><small>到达</small><b>Lv.<span id="gameover-level">1</span></b></div><div><small>最佳</small><b id="gameover-best">0</b></div></div>
-          <button id="gameover-restart" class="primary-button" type="button">再玩一轮</button>
-          <button id="gameover-home" class="text-button" type="button">换个模式</button>
+          <div class="result-face" aria-hidden="true"><span>×﹏×</span></div>
+          <span class="modal-kicker">节拍断开了</span><h2 id="gameover-title">挑战失败</h2>
+          <div class="result-grid"><div><small>得分</small><b id="gameover-score">0</b></div><div><small>到达</small><b>第 <span id="gameover-level">1</span> 战</b></div><div><small>最佳</small><b id="gameover-best">0</b></div></div>
+          <button id="gameover-restart" class="primary-button" type="button">重新挑战</button>
+          <button id="gameover-home" class="text-button" type="button">返回主页</button>
+        </div>
+      </section>
+
+      <section id="reward-modal" class="modal modal--reward" role="dialog" aria-modal="true" aria-labelledby="reward-title">
+        <div class="modal-card reward-card">
+          <span class="modal-kicker">战斗胜利 · 选择一个</span><h2 id="reward-title">强化泡泡</h2><p>奖励会保留到本轮挑战结束。</p>
+          <div class="reward-list">
+            ${[0, 1, 2].map((index) => `<button class="reward-option" data-reward-index="${index}" type="button"><i id="reward-icon-${index}">✦</i><span><b id="reward-title-${index}">泡泡利刃</b><small id="reward-description-${index}">提高攻击力</small></span><em>选择</em></button>`).join('')}
+          </div>
+        </div>
+      </section>
+
+      <section id="victory-modal" class="modal modal--victory" role="dialog" aria-modal="true" aria-labelledby="victory-title">
+        <div class="modal-card modal-card--result victory-card">
+          <div class="victory-crown" aria-hidden="true">✦</div>
+          <span class="modal-kicker">五战全胜</span><h2 id="victory-title">花园重归节拍</h2><p>星尘巨王也被你的泡泡弹走啦！</p>
+          <div class="result-grid"><div><small>总得分</small><b id="victory-score">0</b></div><div><small>战斗</small><b>5/5</b></div><div><small>剩余生命</small><b id="victory-health">0</b></div></div>
+          <button id="victory-restart" class="primary-button" type="button">再闯一轮</button>
+          <button id="victory-home" class="text-button" type="button">返回主页</button>
         </div>
       </section>
 
@@ -235,11 +424,12 @@ export class AppUI {
           <div class="modal-heading"><div><span class="modal-kicker">按你的方式玩</span><h2 id="settings-title">游戏设置</h2></div><button id="settings-close" class="icon-button" type="button" aria-label="关闭设置">×</button></div>
           <label class="setting-row"><span><b>游戏音效</b><small>点击与反馈声音</small></span><input type="checkbox" data-preference="sound"><i></i></label>
           <label class="setting-row"><span><b>背景音乐</b><small>原创泡泡花园循环曲</small></span><input type="checkbox" data-preference="music"><i></i></label>
-          <label class="volume-row" for="music-volume"><span><b>音乐音量</b><small>拖动调整背景音乐响度</small></span><output id="music-volume-value" for="music-volume">40%</output><input id="music-volume" type="range" min="0" max="100" step="1" value="40" aria-label="音乐音量"></label>
+          <label class="volume-row" for="music-volume"><span><b>音乐音量</b><small>拖动调整背景音乐响度</small></span><output id="music-volume-value" for="music-volume">40%</output><input id="music-volume" type="range" min="0" max="100" step="1" value="40" style="--volume-progress: 40%" aria-label="音乐音量"></label>
           <label class="setting-row"><span><b>触感反馈</b><small>支持设备上的轻微振动</small></span><input type="checkbox" data-preference="haptics"><i></i></label>
           <label class="setting-row"><span><b>减少动态效果</b><small>减少弹跳、粒子和震动</small></span><input type="checkbox" data-preference="reducedMotion"><i></i></label>
         </div>
       </section>
+
       <div id="live-region" class="sr-only" aria-live="polite"></div>
     `;
   }

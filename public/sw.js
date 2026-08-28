@@ -1,10 +1,15 @@
-const CACHE_NAME = 'rhythm-bubbles-v6';
+const CACHE_NAME = 'rhythm-bubbles-v31';
 const CORE_ASSETS = [
   './',
   './manifest.webmanifest',
   './art/bubble-garden.webp',
   './art/icon-192.png',
   './art/icon-512.png',
+  './art/jelly-enemy.png',
+  './art/angler-enemy.png',
+  './art/hermit-enemy.png',
+  './art/manta-enemy.png',
+  './art/puffer-enemy.png',
   './audio/bubble-garden-groove-v2.wav',
   './audio/tap.wav',
   './audio/correct-pop-1.wav',
@@ -12,7 +17,11 @@ const CORE_ASSETS = [
   './audio/correct-pop-3.wav',
   './audio/wrong-wobble.wav',
   './audio/level-up.wav',
-  './audio/countdown.wav'
+  './audio/countdown.wav',
+  './audio/enemy-hit.wav',
+  './audio/enemy-attack.wav',
+  './audio/shield-break.wav',
+  './audio/victory.wav'
 ];
 
 self.addEventListener('install', (event) => {

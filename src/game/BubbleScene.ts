@@ -13,13 +13,18 @@ interface BubbleView {
 
 const WIDTH = 720;
 const HEIGHT = 1280;
-const BOARD_CENTER_Y = 700;
+const BOARD_CENTER_Y = 920;
 const BOARD_SIZE = 604;
+const ENEMY_CENTER_Y = 525;
+const ENEMY_RAGE_TINT = 0xff6f7d;
 
 export class BubbleScene extends Phaser.Scene {
   private background!: Phaser.GameObjects.Image;
   private board!: Phaser.GameObjects.Graphics;
   private boardGlow!: Phaser.GameObjects.Graphics;
+  private intentLinks!: Phaser.GameObjects.Graphics;
+  private shieldAura!: Phaser.GameObjects.Graphics;
+  private enemy!: Phaser.GameObjects.Image;
   private dropletEmitter!: Phaser.GameObjects.Particles.ParticleEmitter;
   private bubbleViews: BubbleView[] = [];
   private transientEffects = new Set<Phaser.GameObjects.GameObject>();
@@ -28,11 +33,18 @@ export class BubbleScene extends Phaser.Scene {
   private wrongWobbleCount = 0;
   private feedbackEpoch = 0;
   private currentLevelKey = '';
+  private currentEnemyBattle = 0;
+  private enemyRestScaleX = 1;
+  private enemyRestScaleY = 1;
   private latestSnapshot!: SessionSnapshot;
   private preferences!: Preferences;
   private unsubscribe?: () => void;
   private bgm?: AdjustableSound;
   private manualTime = false;
+  private renderedIntentLinkCount = 0;
+  private shieldBreakCount = 0;
+  private shieldVisualMax = 0;
+  private shieldImpact?: Phaser.GameObjects.Graphics;
 
   constructor(private readonly controller: GameController) {
     super({ key: 'BubbleScene' });
@@ -40,6 +52,11 @@ export class BubbleScene extends Phaser.Scene {
 
   preload(): void {
     this.load.image('garden-bg', 'art/bubble-garden.webp');
+    this.load.image('jelly-enemy', 'art/jelly-enemy.png');
+    this.load.image('angler-enemy', 'art/angler-enemy.png');
+    this.load.image('hermit-enemy', 'art/hermit-enemy.png');
+    this.load.image('manta-enemy', 'art/manta-enemy.png');
+    this.load.image('puffer-enemy', 'art/puffer-enemy.png');
     this.load.audio('bgm', 'audio/bubble-garden-groove-v2.wav');
     this.load.audio('tap', 'audio/tap.wav');
     this.load.audio('correct-pop-1', 'audio/correct-pop-1.wav');
@@ -48,6 +65,10 @@ export class BubbleScene extends Phaser.Scene {
     this.load.audio('wrong-wobble', 'audio/wrong-wobble.wav');
     this.load.audio('level-up', 'audio/level-up.wav');
     this.load.audio('countdown', 'audio/countdown.wav');
+    this.load.audio('enemy-hit', 'audio/enemy-hit.wav');
+    this.load.audio('enemy-attack', 'audio/enemy-attack.wav');
+    this.load.audio('shield-break', 'audio/shield-break.wav');
+    this.load.audio('victory', 'audio/victory.wav');
   }
 
   create(): void {
@@ -59,6 +80,7 @@ export class BubbleScene extends Phaser.Scene {
     this.createBubbleTexture('bubble-normal', ['#d8fff3', '#79dcca', '#45b9ac']);
     this.createBubbleTexture('bubble-target', ['#fff6a8', '#ffb96f', '#ff7f82']);
     this.createDropletTexture();
+    this.enemy = this.add.image(WIDTH / 2, ENEMY_CENTER_Y, 'jelly-enemy').setDisplaySize(260, 260).setDepth(7).setVisible(false);
     this.dropletEmitter = this.add.particles(0, 0, 'bubble-droplet', {
       emitting: false,
       lifespan: { min: 300, max: 460 },
@@ -73,6 +95,8 @@ export class BubbleScene extends Phaser.Scene {
 
     this.boardGlow = this.add.graphics().setDepth(4);
     this.board = this.add.graphics().setDepth(5);
+    this.intentLinks = this.add.graphics().setDepth(6);
+    this.shieldAura = this.add.graphics().setDepth(46);
     this.drawBoard();
 
     this.game.canvas.setAttribute('aria-label', '泡泡节拍游戏区：轻触泡泡进行游戏');
@@ -103,6 +127,27 @@ export class BubbleScene extends Phaser.Scene {
       phase: this.feedbackPhase,
       correctReleaseCount: this.correctReleaseCount,
       wrongWobbleCount: this.wrongWobbleCount,
+      intentLinks: {
+        rendered: this.renderedIntentLinkCount,
+      },
+      shield: {
+        active: this.latestSnapshot?.shield > 0,
+        breakCount: this.shieldBreakCount,
+        max: this.shieldVisualMax,
+        ratio: this.shieldVisualMax > 0
+          ? Number((this.latestSnapshot.shield / this.shieldVisualMax).toFixed(2))
+          : 0,
+        damageStage: this.getShieldDamageStage(this.latestSnapshot?.shield ?? 0),
+        cracksVisible: Boolean(this.shieldImpact?.active),
+      },
+      enemy: this.enemy ? {
+        visible: this.enemy.visible,
+        alpha: Number(this.enemy.alpha.toFixed(2)),
+        x: Math.round(this.enemy.x),
+        y: Math.round(this.enemy.y),
+        scaleX: Number(this.enemy.scaleX.toFixed(3)),
+        scaleY: Number(this.enemy.scaleY.toFixed(3)),
+      } : null,
       transformedBubbles: this.bubbleViews
         .map((view, index) => ({
           index,
@@ -126,24 +171,32 @@ export class BubbleScene extends Phaser.Scene {
 
   private sync(update: SessionUpdate): void {
     const snapshot = update.snapshot;
-    const nextLevelKey = `${snapshot.mode}:${snapshot.level}:${snapshot.rows}x${snapshot.cols}`;
+    const nextLevelKey = `${snapshot.mode}:${snapshot.battle}:${snapshot.board}:${snapshot.rows}x${snapshot.cols}`;
 
     if (snapshot.phase === 'menu') {
       this.clearBoard();
       this.board.setVisible(false);
       this.boardGlow.setVisible(false);
+      this.enemy.setVisible(false);
+      this.intentLinks.clear();
+      this.shieldAura.clear();
+      this.renderedIntentLinkCount = 0;
+      this.shieldVisualMax = 0;
       this.bgm?.stop();
       return;
     }
 
     this.board.setVisible(true);
     this.boardGlow.setVisible(true);
+    this.syncEnemy(snapshot, update);
+    this.drawShield(snapshot);
     if (nextLevelKey !== this.currentLevelKey) {
-      this.currentLevelKey = nextLevelKey;
       this.buildBubbles(snapshot);
+      this.currentLevelKey = nextLevelKey;
     }
 
     this.updateBubbles(snapshot, update);
+    this.drawIntentLinks(snapshot);
     this.handleEffect(update);
     this.syncAudio();
   }
@@ -195,16 +248,28 @@ export class BubbleScene extends Phaser.Scene {
 
   private updateBubbles(snapshot: SessionSnapshot, update: SessionUpdate): void {
     const visibleTargets = new Set(snapshot.visibleTargetIndices);
+    const intentTargets = new Map(snapshot.enemyIntentTargets
+      .slice(snapshot.enemyIntentCursor)
+      .map((index, offset) => [index, snapshot.enemyIntentCursor + offset]));
     for (const bubble of snapshot.bubbles) {
       const view = this.bubbleViews[bubble.index];
       if (!view) continue;
-      const visibleTarget = visibleTargets.has(bubble.index);
+      const intentOrder = intentTargets.get(bubble.index);
+      const showIntentMarker = intentOrder !== undefined && ['sequence', 'capture', 'shell'].includes(snapshot.enemyMechanic);
+      const visibleTarget = visibleTargets.has(bubble.index) || showIntentMarker;
       view.image.setTexture(visibleTarget ? 'bubble-target' : 'bubble-normal');
-      view.order.setVisible(snapshot.mode === 'sequence' && snapshot.phase === 'preview' && visibleTarget);
-      view.order.setText(bubble.order === null ? '' : String(bubble.order + 1));
+      const showSequence = snapshot.mode === 'sequence' && snapshot.phase === 'preview' && visibleTargets.has(bubble.index);
+      view.order.setVisible(showIntentMarker || showSequence);
+      view.order.setColor(showIntentMarker ? '#e05268' : '#5267a8');
+      view.order.setText(showIntentMarker
+        ? snapshot.enemyMechanic === 'capture' ? '救'
+          : snapshot.enemyMechanic === 'shell' ? '破'
+            : String(intentOrder + 1)
+        : bubble.order === null ? '' : String(bubble.order + 1));
       if (bubble.cleared && !view.cleared) {
         view.cleared = true;
-        const animateClear = update.effectIndex === bubble.index && ['correct', 'level-up'].includes(update.effect);
+        const animateClear = update.effectIndex === bubble.index
+          && ['correct', 'board-clear', 'enemy-staggered', 'enemy-countered', 'enemy-break', 'enemy-windup', 'encounter-win'].includes(update.effect);
         if (animateClear) continue;
         if (this.preferences.reducedMotion) {
           view.image.setVisible(false);
@@ -229,6 +294,7 @@ export class BubbleScene extends Phaser.Scene {
       this.feedbackEpoch += 1;
       this.feedbackPhase = 'idle';
       this.clearTransientEffects();
+      this.shieldImpact = undefined;
       this.dropletEmitter.killAll();
       this.tweens.killTweensOf([this.board, this.boardGlow]);
       this.board.setScale(1);
@@ -236,33 +302,64 @@ export class BubbleScene extends Phaser.Scene {
     }
     if (effect === 'none') return;
 
-    if (effect === 'correct' || effect === 'level-up') {
-      if (effectIndex !== undefined) this.animateCorrectAt(effectIndex, effect === 'level-up');
-      if (effect === 'level-up' && !this.preferences.reducedMotion) {
-        this.tweens.add({ targets: [this.board, this.boardGlow], scaleX: 1.025, scaleY: 1.025, yoyo: true, duration: 180, ease: 'Back.Out' });
+    const bubbleHitEffects = ['correct', 'board-clear', 'enemy-staggered', 'enemy-countered', 'enemy-break', 'enemy-windup', 'encounter-win'];
+    if (bubbleHitEffects.includes(effect) && effectIndex !== undefined) {
+      this.animateCorrectAt(effectIndex, ['board-clear', 'encounter-win'].includes(effect));
+    }
+    if (['correct', 'board-clear', 'enemy-staggered', 'enemy-countered', 'enemy-break', 'encounter-win'].includes(effect)) {
+      if (this.latestSnapshot.lastAttackReduction > 0) {
+        this.animateEnemyStaggered(this.latestSnapshot.lastDamage, this.latestSnapshot.lastAttackReduction);
+      } else {
+        this.animateEnemyHit(this.latestSnapshot.lastDamage, effect === 'encounter-win');
       }
     }
 
-    if (effect === 'wrong' && !this.preferences.reducedMotion) {
+    if (effect === 'enemy-windup') this.animateEnemyWindup();
+    if (effect === 'enemy-break') this.animateEnemyBreak();
+    if (['enemy-impact', 'timeout-impact'].includes(effect)) {
+      this.animateEnemyScreenImpact(effect === 'timeout-impact');
+      if (this.latestSnapshot.lastBlockedDamage > 0) {
+        this.animateShieldImpact(this.latestSnapshot.lastBlockedDamage, this.latestSnapshot.shield === 0);
+      }
+    }
+    if (effect === 'enemy-recover') this.restoreEnemyPose();
+
+    if (['mistake', 'mistake-overflow', 'counter-miss'].includes(effect)) {
+      if (this.latestSnapshot.lastBlockedDamage > 0) {
+        this.animateShieldImpact(this.latestSnapshot.lastBlockedDamage, this.latestSnapshot.shield === 0);
+      }
       if (effectIndex !== undefined) {
-        this.feedbackEpoch += 1;
-        this.cancelPendingCorrectAnimations();
-        this.clearTransientEffects();
-        this.dropletEmitter.killAll();
-        this.animateWrongAt(effectIndex);
-        this.cameras.main.shake(70, 0.002);
-      } else {
-        this.cameras.main.shake(110, 0.003);
+        if (!this.preferences.reducedMotion) {
+          this.animateWrongAt(effectIndex);
+        }
+        this.floatPlayerDamage(effect === 'mistake-overflow' ? '容错耗尽' : effect === 'counter-miss' ? '化解失误' : '失误');
       }
     }
 
     if (!this.preferences.sound) return;
-    if (effect === 'correct') {
+    if (bubbleHitEffects.includes(effect) && effectIndex !== undefined) {
       const variation = ((Math.floor(this.latestSnapshot.score / 10) + (effectIndex ?? 0)) % 3) + 1;
       this.sound.play(`correct-pop-${variation}`, { volume: 0.4 });
+      this.sound.play('enemy-hit', { volume: this.latestSnapshot.lastAttackReduction > 0 ? 0.4 : 0.22 });
     }
-    if (effect === 'wrong') this.sound.play('wrong-wobble', { volume: 0.38 });
-    if (effect === 'level-up') this.sound.play('level-up', { volume: 0.42 });
+    if (effect === 'enemy-windup') this.sound.play('countdown', { volume: 0.32 });
+    if (effect === 'enemy-break') this.sound.play('level-up', { volume: 0.48 });
+    if (['enemy-impact', 'timeout-impact'].includes(effect)) {
+      this.sound.play('enemy-attack', { volume: effect === 'timeout-impact' ? 0.62 : this.latestSnapshot.battle === 1 ? 0.44 : 0.52 });
+    }
+    if (['enemy-impact', 'timeout-impact'].includes(effect)
+      && this.latestSnapshot.lastBlockedDamage > 0 && this.latestSnapshot.shield === 0) {
+      this.sound.play('shield-break', { volume: 0.62 });
+    }
+    if (this.latestSnapshot.lastAttackReduction > 0 && ['board-clear', 'enemy-staggered'].includes(effect)) {
+      this.sound.play('level-up', { volume: 0.24 });
+    }
+    if (effect === 'encounter-win') {
+      this.sound.play('enemy-hit', { volume: 0.5 });
+      this.time.delayedCall(110, () => this.sound.play('level-up', { volume: 0.42 }));
+    }
+    if (effect === 'victory') this.sound.play('victory', { volume: 0.52 });
+    if (['mistake', 'mistake-overflow', 'counter-miss'].includes(effect)) this.sound.play('wrong-wobble', { volume: effect === 'mistake-overflow' ? 0.48 : 0.38 });
     if (effect === 'countdown') this.sound.play('countdown', { volume: 0.23 });
   }
 
@@ -290,12 +387,176 @@ export class BubbleScene extends Phaser.Scene {
       ease: 'Sine.In',
       onComplete: () => {
         if (feedbackEpoch !== this.feedbackEpoch) return;
-        this.releaseCorrectBubble(view, large);
+        this.releaseCorrectBubble(view, large, !this.latestSnapshot.bubbles[index]?.cleared);
       },
     });
   }
 
-  private releaseCorrectBubble(view: BubbleView, large: boolean): void {
+  private drawIntentLinks(snapshot: SessionSnapshot): void {
+    this.intentLinks.clear();
+    this.renderedIntentLinkCount = 0;
+    if (snapshot.enemyAttackState !== 'windup') return;
+
+    if (snapshot.enemyMechanic === 'sweep' && snapshot.enemyHazardRow !== null) {
+      const innerSize = BOARD_SIZE - 70;
+      const rows = Math.max(1, snapshot.rows);
+      const cellHeight = innerSize / rows;
+      const top = BOARD_CENTER_Y - innerSize / 2 + snapshot.enemyHazardRow * cellHeight;
+      this.intentLinks.fillStyle(0x6d78d8, 0.22);
+      this.intentLinks.fillRoundedRect((WIDTH - BOARD_SIZE) / 2 + 12, top + 4, BOARD_SIZE - 24, cellHeight - 8, 28);
+      this.intentLinks.lineStyle(5, 0xb8c9ff, 0.82);
+      this.intentLinks.lineBetween(74, top + cellHeight / 2, WIDTH - 74, top + cellHeight / 2);
+      this.renderedIntentLinkCount = 1;
+      return;
+    }
+    if (snapshot.enemyMechanic === 'guard' || snapshot.enemyIntentTargets.length === 0) return;
+
+    const count = snapshot.enemyIntentTargets.length;
+    snapshot.enemyIntentTargets.forEach((index, order) => {
+      if (order < snapshot.enemyIntentCursor) return;
+      const view = this.bubbleViews[index];
+      if (!view) return;
+      this.renderedIntentLinkCount += 1;
+
+      const active = order === snapshot.enemyIntentCursor;
+      const lane = order - (count - 1) / 2;
+      const startX = WIDTH / 2 + lane * 24;
+      const startY = ENEMY_CENTER_Y + 62;
+      const endX = view.image.x;
+      const endY = view.image.y;
+      if (snapshot.enemyMechanic === 'shell') {
+        this.intentLinks.lineStyle(active ? 10 : 7, active ? 0xff8b78 : 0x9e78d8, active ? 0.92 : 0.68);
+        this.intentLinks.strokeCircle(endX, endY, active ? 42 : 34);
+        this.intentLinks.lineStyle(3, 0xffffff, 0.88);
+        this.intentLinks.strokeCircle(endX, endY, active ? 31 : 26);
+      } else {
+        const outer = snapshot.enemyMechanic === 'capture' ? 0x986f26 : 0x7d2944;
+        const inner = snapshot.enemyMechanic === 'capture' ? 0xffd86a : active ? 0xff7890 : 0xd95470;
+        this.intentLinks.lineStyle(active ? 8 : 5, outer, active ? 0.78 : 0.48);
+        this.intentLinks.lineBetween(startX, startY, endX, endY);
+        this.intentLinks.lineStyle(active ? 4 : 2, inner, active ? 0.96 : 0.7);
+        this.intentLinks.lineBetween(startX, startY, endX, endY);
+        this.intentLinks.fillStyle(inner, active ? 0.96 : 0.72);
+        this.intentLinks.fillCircle(endX, endY, active ? 7 : 5);
+      }
+    });
+  }
+
+  private drawShield(snapshot: SessionSnapshot): void {
+    this.shieldAura.clear().setDepth(46);
+    if (snapshot.shield <= 0 || ['menu', 'reward', 'victory', 'game-over'].includes(snapshot.phase)) return;
+    this.shieldVisualMax = Math.max(this.shieldVisualMax, snapshot.shield);
+    this.shieldAura.fillStyle(0xffffff, 0.1);
+    this.shieldAura.fillRect(0, 0, WIDTH, HEIGHT);
+  }
+
+  private animateShieldImpact(blocked: number, broken: boolean): void {
+    if (this.shieldImpact?.active) this.destroyTransient(this.shieldImpact);
+    const barrier = this.add.graphics().setDepth(49);
+    this.shieldImpact = barrier;
+    this.transientEffects.add(barrier);
+    const stage = broken ? 4 : { intact: 0, light: 1, damaged: 2, critical: 3, none: 0 }[
+      this.getShieldDamageStage(this.latestSnapshot.shield)
+    ];
+    barrier.fillStyle(0xffffff, broken ? 0.22 : 0.16);
+    barrier.fillRect(0, 0, WIDTH, HEIGHT);
+    barrier.lineStyle(broken ? 18 : 12, 0xeafffd, 0.98);
+    barrier.strokeRect(6, 6, WIDTH - 12, HEIGHT - 12);
+    barrier.fillStyle(0xeafffd, broken ? 0.2 : 0.12);
+    barrier.fillCircle(WIDTH / 2, 760, broken ? 94 : 72);
+    barrier.lineStyle(broken ? 14 : 9, 0x78e4dc, 0.92);
+    barrier.strokeCircle(WIDTH / 2, 760, broken ? 102 : 80);
+    this.drawShieldCracks(barrier, stage, 0.92, 5);
+    if (broken) {
+      this.shieldBreakCount += 1;
+      for (let index = 0; index < 12; index += 1) {
+        const angle = (Math.PI * 2 * index) / 12 - Math.PI / 2;
+        const radius = 112 + (index % 3) * 34;
+        const fragment = this.add.triangle(
+          WIDTH / 2 + Math.cos(angle) * radius,
+          760 + Math.sin(angle) * radius,
+          -20, 16, 0, -25, 22, 15,
+          index % 2 === 0 ? 0xeafffd : 0x78e4dc,
+          0.88,
+        ).setDepth(50).setAngle(index * 29);
+        this.transientEffects.add(fragment);
+        this.destroyAfterTween(fragment, {
+          x: fragment.x + Math.cos(angle) * (95 + (index % 4) * 18),
+          y: fragment.y + Math.sin(angle) * (95 + (index % 4) * 18) + 52,
+          angle: fragment.angle + (index % 2 === 0 ? 125 : -140),
+          alpha: 0,
+          duration: this.preferences.reducedMotion ? 120 : 520,
+          ease: 'Cubic.Out',
+        });
+      }
+    }
+
+    this.tweens.add({
+      targets: barrier,
+      alpha: 0,
+      delay: this.preferences.reducedMotion ? 70 : 480,
+      duration: this.preferences.reducedMotion ? 90 : broken ? 420 : 240,
+      ease: 'Cubic.In',
+      onComplete: () => {
+        if (this.shieldImpact === barrier) this.shieldImpact = undefined;
+        this.destroyTransient(barrier);
+      },
+    });
+
+    this.floatCombatText(broken ? '护盾碎裂！' : `护盾格挡 ${blocked}`, WIDTH / 2, 790, '#399f9a', broken ? 40 : 32);
+  }
+
+  private getShieldDamageStage(shield: number): 'none' | 'intact' | 'light' | 'damaged' | 'critical' {
+    if (shield <= 0 || this.shieldVisualMax <= 0) return 'none';
+    const ratio = shield / this.shieldVisualMax;
+    if (ratio > 0.75) return 'intact';
+    if (ratio > 0.5) return 'light';
+    if (ratio > 0.25) return 'damaged';
+    return 'critical';
+  }
+
+  private drawShieldCracks(
+    graphics: Phaser.GameObjects.Graphics,
+    stage: number,
+    alpha: number,
+    width = 3,
+  ): void {
+    const crackPaths = [
+      [[360, 760], [338, 733], [346, 705], [319, 682], [306, 650]],
+      [[360, 760], [389, 739], [381, 708], [412, 686], [428, 654]],
+      [[360, 760], [336, 790], [347, 821], [320, 847], [307, 882]],
+      [[338, 733], [309, 744], [285, 725], [261, 736]],
+      [[389, 739], [420, 752], [445, 731], [472, 740]],
+      [[360, 760], [393, 787], [384, 818], [417, 848], [434, 885]],
+      [[347, 821], [321, 814], [296, 831], [270, 820]],
+      [[384, 818], [414, 810], [442, 828], [468, 816]],
+      [[360, 760], [363, 808], [349, 853], [367, 895], [354, 941]],
+      [[319, 682], [294, 665], [282, 633], [254, 614]],
+      [[412, 686], [439, 667], [449, 637], [478, 617]],
+      [[320, 847], [291, 866], [278, 899], [246, 917]],
+      [[417, 848], [447, 868], [460, 902], [493, 922]],
+      [[349, 853], [329, 884], [337, 918], [315, 950]],
+    ];
+    const visibleCount = [0, 2, 5, 9, crackPaths.length][Math.min(4, Math.max(0, stage))];
+    if (visibleCount === 0) return;
+
+    graphics.lineStyle(width + 3, 0xeafffd, alpha * 0.48);
+    graphics.beginPath();
+    for (const path of crackPaths.slice(0, visibleCount)) {
+      graphics.moveTo(path[0][0], path[0][1]);
+      for (const [x, y] of path.slice(1)) graphics.lineTo(x, y);
+    }
+    graphics.strokePath();
+    graphics.lineStyle(width, 0x4ebfbd, alpha);
+    graphics.beginPath();
+    for (const path of crackPaths.slice(0, visibleCount)) {
+      graphics.moveTo(path[0][0], path[0][1]);
+      for (const [x, y] of path.slice(1)) graphics.lineTo(x, y);
+    }
+    graphics.strokePath();
+  }
+
+  private releaseCorrectBubble(view: BubbleView, large: boolean, restoreAfter = false): void {
     const { image, baseScale } = view;
     const { x, y } = image;
     const diameter = image.width * baseScale;
@@ -319,7 +580,10 @@ export class BubbleScene extends Phaser.Scene {
       alpha: 0,
       duration: 150,
       ease: 'Cubic.Out',
-      onComplete: () => image.setVisible(false),
+      onComplete: () => {
+        if (restoreAfter) image.setVisible(true).setAlpha(1).setScale(baseScale);
+        else image.setVisible(false);
+      },
     });
     this.destroyAfterTween(ring, { scale: large ? 2.6 : 2.15, alpha: 0, duration: large ? 320 : 260, ease: 'Cubic.Out' });
     this.destroyAfterTween(glow, { scale: large ? 2.8 : 2.3, alpha: 0, duration: 210, ease: 'Sine.Out' });
@@ -399,6 +663,206 @@ export class BubbleScene extends Phaser.Scene {
           }),
         }),
       }),
+    });
+  }
+
+  private syncEnemy(snapshot: SessionSnapshot, update: SessionUpdate): void {
+    if (snapshot.battle === this.currentEnemyBattle && update.effect !== 'start') return;
+    this.currentEnemyBattle = snapshot.battle;
+    const size = snapshot.enemyIsBoss ? 310 : 250 + snapshot.battle * 8;
+    this.tweens.killTweensOf(this.enemy);
+    this.enemy
+      .setTexture(snapshot.enemyTexture)
+      .setVisible(true)
+      .setAlpha(1)
+      .setAngle(0)
+      .setPosition(WIDTH / 2, ENEMY_CENTER_Y)
+      .setDisplaySize(size, size)
+      .setDepth(7)
+      .setTint(this.getEnemyTint());
+    this.enemyRestScaleX = this.enemy.scaleX;
+    this.enemyRestScaleY = this.enemy.scaleY;
+    if (!this.preferences.reducedMotion) {
+      this.enemy.setAlpha(0).setScale(this.enemyRestScaleX * 0.72, this.enemyRestScaleY * 0.72).setY(ENEMY_CENTER_Y - 14);
+      this.tweens.add({ targets: this.enemy, alpha: 1, y: ENEMY_CENTER_Y, scaleX: this.enemyRestScaleX, scaleY: this.enemyRestScaleY, duration: 340, ease: 'Back.Out' });
+    }
+  }
+
+  private animateEnemyHit(damage: number, defeated: boolean): void {
+    if (!this.enemy.visible) return;
+    if (!this.preferences.reducedMotion) {
+      this.tweens.killTweensOf(this.enemy);
+      this.enemy.setDepth(7).setPosition(WIDTH / 2, ENEMY_CENTER_Y).setScale(this.enemyRestScaleX, this.enemyRestScaleY);
+      this.enemy.setTintFill(0xffffff);
+      this.tweens.add({
+        targets: this.enemy,
+        x: this.enemy.x + 15,
+        scaleX: this.enemyRestScaleX * 0.92,
+        scaleY: this.enemyRestScaleY * 1.08,
+        duration: 55,
+        yoyo: true,
+        ease: 'Sine.Out',
+        onComplete: () => {
+          this.enemy.clearTint();
+          this.enemy.setTint(this.getEnemyTint()).setX(WIDTH / 2);
+          if (defeated) this.tweens.add({ targets: this.enemy, alpha: 0, y: ENEMY_CENTER_Y - 30, angle: 7, duration: 420, ease: 'Back.In' });
+          else if (this.latestSnapshot.enemyAttackState === 'windup') this.setEnemyWindupPose();
+          else this.restoreEnemyPose();
+        },
+      });
+      if (defeated) {
+        this.dropletEmitter.explode(42, this.enemy.x, this.enemy.y);
+      }
+    }
+    this.floatCombatText(defeated ? '完美收尾！' : `-${damage}`, WIDTH / 2, ENEMY_CENTER_Y - 40, defeated ? '#ff6f7d' : '#7358b8', defeated ? 42 : 32);
+  }
+
+  private animateEnemyWindup(): void {
+    if (this.preferences.reducedMotion || !this.enemy.visible) return;
+    this.tweens.killTweensOf(this.enemy);
+    this.enemy.clearTint().setTint(ENEMY_RAGE_TINT).setDepth(8).setPosition(WIDTH / 2, ENEMY_CENTER_Y).setAngle(0);
+    this.tweens.add({
+      targets: this.enemy,
+      y: ENEMY_CENTER_Y + 12,
+      scaleX: this.enemyRestScaleX * 1.16,
+      scaleY: this.enemyRestScaleY * 0.82,
+      duration: Math.min(620, this.latestSnapshot.enemyAttackWindupMs * 0.72),
+      ease: 'Cubic.In',
+    });
+  }
+
+  private setEnemyWindupPose(): void {
+    this.enemy
+      .clearTint()
+      .setTint(ENEMY_RAGE_TINT)
+      .setDepth(8)
+      .setPosition(WIDTH / 2, ENEMY_CENTER_Y + 12)
+      .setScale(this.enemyRestScaleX * 1.16, this.enemyRestScaleY * 0.82);
+  }
+
+  private animateEnemyScreenImpact(timeout: boolean): void {
+    const blocked = this.latestSnapshot.lastBlockedDamage;
+    const damage = this.latestSnapshot.lastEnemyDamage;
+    if (!this.preferences.reducedMotion && this.enemy.visible) {
+      this.tweens.killTweensOf(this.enemy);
+      this.enemy
+        .setVisible(true)
+        .setAlpha(1)
+        .setDepth(48)
+        .setAngle(timeout ? -4 : 0)
+        .setPosition(WIDTH / 2, 735)
+        .setScale(this.enemyRestScaleX * (timeout ? 2.55 : 2.3), this.enemyRestScaleY * (timeout ? 2.55 : 2.3))
+        .setTintFill(0xffffff);
+      this.cameras.main.flash(timeout ? 125 : 95, 255, timeout ? 118 : 150, timeout ? 105 : 126, false);
+      const shockwave = this.add.circle(WIDTH / 2, 700, 54)
+        .setStrokeStyle(timeout ? 18 : 14, timeout ? 0xff6f7d : 0xffffff, 0.86)
+        .setDepth(47);
+      this.transientEffects.add(shockwave);
+      this.destroyAfterTween(shockwave, { scale: 8.5, alpha: 0, duration: 260, ease: 'Cubic.Out' });
+      this.time.delayedCall(75, () => {
+        if (!this.enemy.active) return;
+        this.enemy.clearTint().setTint(this.getEnemyTint());
+        this.tweens.add({
+          targets: this.enemy,
+          y: ENEMY_CENTER_Y,
+          scaleX: this.enemyRestScaleX,
+          scaleY: this.enemyRestScaleY,
+          angle: 0,
+          duration: 300,
+          ease: 'Back.Out',
+          onComplete: () => this.enemy.setDepth(7),
+        });
+      });
+    }
+    const label = timeout ? '超时重击' : blocked > 0 ? `护盾挡住 ${blocked}` : '撞击';
+    this.floatCombatText(`${label} · ${damage > 0 ? `生命 -${damage}` : '完全格挡'}`, WIDTH / 2, 430, blocked > 0 ? '#5267a8' : '#e96973', timeout ? 38 : 34);
+  }
+
+  private animateEnemyStaggered(damage: number, reduction: number): void {
+    if (!this.enemy.visible) return;
+    if (!this.preferences.reducedMotion) {
+      this.tweens.killTweensOf(this.enemy);
+      this.enemy.clearTint().setTint(0x9bf1e2).setDepth(8);
+      this.tweens.add({
+        targets: this.enemy,
+        y: ENEMY_CENTER_Y - 22,
+        angle: -6,
+        scaleX: this.enemyRestScaleX * 1.1,
+        scaleY: this.enemyRestScaleY * 0.88,
+        duration: 105,
+        yoyo: true,
+        ease: 'Back.Out',
+        onComplete: () => this.restoreEnemyPose(),
+      });
+      if (reduction >= 0.25) this.cameras.main.shake(70, 0.0018);
+      this.dropletEmitter.explode(22, this.enemy.x, this.enemy.y);
+    }
+    const reductionPercent = Math.round(reduction * 1000) / 10;
+    this.floatCombatText(`-${damage} · 蓄力 -${reductionPercent}%`, WIDTH / 2, ENEMY_CENTER_Y - 48, '#2f9f96', 34);
+  }
+
+  private animateEnemyBreak(): void {
+    if (!this.enemy.visible) return;
+    if (!this.preferences.reducedMotion) {
+      this.tweens.killTweensOf(this.enemy);
+      this.enemy.clearTint().setTint(0x9bf1e2).setDepth(8).setAngle(-8);
+      this.tweens.add({
+        targets: this.enemy,
+        y: ENEMY_CENTER_Y - 28,
+        scaleX: this.enemyRestScaleX * 1.18,
+        scaleY: this.enemyRestScaleY * 0.76,
+        angle: 8,
+        duration: 150,
+        yoyo: true,
+        ease: 'Back.Out',
+        onComplete: () => this.restoreEnemyPose(),
+      });
+      this.dropletEmitter.explode(34, this.enemy.x, this.enemy.y);
+    }
+    this.floatCombatText('破势！伤害 ×1.5', WIDTH / 2, ENEMY_CENTER_Y - 54, '#2f9f96', 38);
+  }
+
+  private floatPlayerDamage(prefix: string): void {
+    const blocked = this.latestSnapshot.lastBlockedDamage;
+    const damage = this.latestSnapshot.lastEnemyDamage;
+    const message = blocked > 0 ? `${prefix} · 护盾 -${blocked}` : `${prefix} · 生命 -${damage}`;
+    this.floatCombatText(message, WIDTH / 2, 430, blocked > 0 ? '#5267a8' : '#e96973', 30);
+  }
+
+  private restoreEnemyPose(): void {
+    if (!this.enemy.active || !this.enemy.visible) return;
+    this.tweens.killTweensOf(this.enemy);
+    this.enemy
+      .clearTint()
+      .setTint(this.getEnemyTint())
+      .setDepth(7)
+      .setAlpha(1)
+      .setAngle(0)
+      .setPosition(WIDTH / 2, ENEMY_CENTER_Y)
+      .setScale(this.enemyRestScaleX, this.enemyRestScaleY);
+  }
+
+  private getEnemyTint(): number {
+    return 0xffffff;
+  }
+
+  private floatCombatText(message: string, x: number, y: number, color: string, size: number): void {
+    const text = this.add.text(x, y, message, {
+      fontFamily: '"Avenir Next Rounded", "PingFang SC", sans-serif',
+      fontSize: `${size}px`,
+      fontStyle: 'bold',
+      color,
+      stroke: '#fffdf4',
+      strokeThickness: 7,
+    }).setOrigin(0.5).setDepth(40).setScale(0.65);
+    this.transientEffects.add(text);
+    this.tweens.add({
+      targets: text,
+      y: y - 46,
+      scale: 1,
+      duration: 180,
+      ease: 'Back.Out',
+      onComplete: () => this.destroyAfterTween(text, { y: y - 76, alpha: 0, duration: 250, delay: 90, ease: 'Cubic.In' }),
     });
   }
 
@@ -492,15 +956,6 @@ export class BubbleScene extends Phaser.Scene {
       effect.destroy();
     }
     this.transientEffects.clear();
-  }
-
-  private cancelPendingCorrectAnimations(): void {
-    for (const view of this.bubbleViews) {
-      if (!view.cleared) continue;
-      this.tweens.killTweensOf([view.image, view.order]);
-      view.image.setVisible(false);
-      view.order.setVisible(false);
-    }
   }
 
   private createAmbientBubbles(): void {

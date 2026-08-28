@@ -2,10 +2,12 @@ import Phaser from 'phaser';
 import './styles.css';
 import { BubbleScene } from './game/BubbleScene';
 import { GameController } from './game/core/GameController';
+import { createSeededRandom } from './game/core/level';
 import type { GameMode } from './game/core/types';
 import { AppUI } from './ui/AppUI';
 
-const controller = new GameController();
+const seed = Number(new URLSearchParams(window.location.search).get('seed'));
+const controller = new GameController(Number.isFinite(seed) && seed > 0 ? createSeededRandom(seed) : undefined);
 const scene = new BubbleScene(controller);
 
 new AppUI(controller, requireElement('ui-layer'));
@@ -41,13 +43,55 @@ window.render_game_to_text = () => {
     mode: snapshot.mode,
     level: snapshot.level,
     score: snapshot.score,
+    battle: {
+      current: snapshot.battle,
+      total: snapshot.totalBattles,
+      board: snapshot.board,
+      enemy: {
+        id: snapshot.enemyId,
+        order: snapshot.enemyOrder,
+        name: snapshot.enemyName,
+        texture: snapshot.enemyTexture,
+        mechanic: snapshot.enemyMechanic,
+        hp: snapshot.enemyHp,
+        maxHp: snapshot.maxEnemyHp,
+        attack: snapshot.enemyAttack,
+        boss: snapshot.enemyIsBoss,
+        attackState: snapshot.enemyAttackState,
+        attackProgress: Number(snapshot.enemyAttackProgress.toFixed(3)),
+        attackCooldownMs: snapshot.enemyAttackCooldownMs,
+        windupMs: snapshot.enemyAttackWindupMs,
+        lastReduction: Number(snapshot.lastAttackReduction.toFixed(3)),
+        intentTargets: snapshot.enemyIntentTargets,
+        intentCursor: snapshot.enemyIntentCursor,
+        hazardRow: snapshot.enemyHazardRow,
+        poise: snapshot.enemyPoise,
+        maxPoise: snapshot.maxEnemyPoise,
+        phase: snapshot.enemyPhase,
+      },
+      player: {
+        hp: snapshot.playerHp,
+        maxHp: snapshot.maxPlayerHp,
+        shield: snapshot.shield,
+        attack: snapshot.attackPower,
+        combo: snapshot.combo,
+        comboRemainingMs: Math.round(snapshot.comboRemainingMs),
+        comboWindowMs: snapshot.comboWindowMs,
+        mistakeDamage: snapshot.mistakeDamage,
+        mistakes: snapshot.mistakeCount,
+        mistakeLimit: snapshot.mistakeLimit,
+      },
+      rewards: snapshot.rewardChoices,
+    },
     timerMs: Math.round(snapshot.remainingTimeMs),
     grid: { rows: snapshot.rows, cols: snapshot.cols },
     remainingTargets: snapshot.remainingTargets,
     visibleTargets: snapshot.visibleTargetIndices,
     expectedIndex: snapshot.expectedIndex,
     feedback: scene.getFeedbackState(),
-    bubbles: snapshot.bubbles.map(({ index, row, col, isTarget, cleared, order }) => ({ index, row, col, isTarget, cleared, order })),
+    bubbles: snapshot.bubbles.map(({ index, row, col, isTarget, cleared, order }) => ({
+      index, row, col, isTarget, cleared, order,
+    })),
   });
 };
 
@@ -56,8 +100,9 @@ window.advanceTime = (milliseconds: number) => {
   controller.tick(Math.max(0, milliseconds));
 };
 
-window.startGame = (mode: GameMode) => controller.start(mode);
+window.startGame = (_mode?: GameMode) => controller.start();
 window.selectBubble = (index: number) => controller.select(index);
+window.selectReward = (index: number) => controller.selectReward(index);
 
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => undefined));
@@ -77,7 +122,8 @@ declare global {
   interface Window {
     render_game_to_text: () => string;
     advanceTime: (milliseconds: number) => void;
-    startGame: (mode: GameMode) => void;
+    startGame: (mode?: GameMode) => void;
     selectBubble: (index: number) => void;
+    selectReward: (index: number) => void;
   }
 }
