@@ -250,10 +250,11 @@ for (let guard = 0; guard < 1400; guard += 1) {
   await page.evaluate((index) => window.selectBubble(index), target);
   const afterHit = await readState(page);
   if (!sawComboImpact && afterHit.battle.current > 1
-    && afterHit.battle.player.combo > 1 && afterHit.battle.enemy.lastReduction > 0) {
+    && afterHit.battle.player.combo > 1 && afterHit.battle.enemy.lastReduction > 0
+    && await page.locator('#combo-burst').isVisible()) {
     const reductionPercent = Math.round(afterHit.battle.enemy.lastReduction * 1000) / 10;
     const expectedImpact = `连击破势 · 蓄力 -${reductionPercent}%`;
-    await page.locator('#combo-impact.is-visible').waitFor();
+    await page.locator('#combo-impact.is-visible').waitFor({ state: 'attached' });
     assert.equal(await page.locator('#combo-impact').textContent(), expectedImpact);
     const comboBox = await page.locator('#combo-burst').boundingBox();
     const enemyBox = await page.locator('#enemy-status').boundingBox();
