@@ -57,7 +57,16 @@ assert.equal(state.battle.player.attack, 8);
 assert.equal(state.battle.player.mistakeDamage, 5);
 assert.equal(state.battle.enemy.poise, 2);
 assert.equal(await page.locator('.liquid-meter').count(), 5, '计时、敌我生命、蓄力和 Combo 应统一使用液体数值条');
-assert.match(await page.locator('#enemy-health-fill').evaluate((element) => getComputedStyle(element).animationName), /liquid-flow/);
+const enemyPotionStyle = await page.locator('#enemy-health-fill').evaluate((element) => ({
+  overflow: getComputedStyle(element).overflow,
+  bubbles: getComputedStyle(element, '::before').animationName,
+  meniscus: getComputedStyle(element, '::after').animationName,
+  outerParticles: getComputedStyle(element.parentElement, '::after').content,
+}));
+assert.equal(enemyPotionStyle.overflow, 'hidden', '药剂气泡必须裁剪在当前填充值内部');
+assert.match(enemyPotionStyle.bubbles, /potion-bubbles-rise/);
+assert.match(enemyPotionStyle.meniscus, /potion-meniscus/);
+assert.equal(enemyPotionStyle.outerParticles, 'none', '空轨道外部不应继续绘制漂浮粒子');
 await screenshot(page, '02-seek-light-battle.png');
 
 const firstTarget = state.bubbles.find((bubble) => bubble.isTarget);
@@ -184,6 +193,7 @@ for (let guard = 0; guard < 1400; guard += 1) {
     await screenshot(page, '07-shield-impact.png');
     await page.evaluate(() => window.advanceTime(320));
     await page.waitForTimeout(1300);
+    await page.waitForFunction(() => !JSON.parse(window.render_game_to_text()).feedback.shield.cracksVisible);
     state = await readState(page);
     assert.equal(state.feedback.shield.damageStage, 'damaged');
     assert.equal(state.feedback.shield.cracksVisible, false, '受击反馈结束后不应持续显示破损');
@@ -288,7 +298,10 @@ assert.equal(await page.locator('#music-volume-value').textContent(), '65%');
 await page.locator('[data-preference="reducedMotion"]').check();
 await page.locator('#settings-close').tap();
 assert.equal(await page.locator('body.reduce-motion').count(), 1);
-assert.equal(await page.locator('#enemy-health-fill').evaluate((element) => getComputedStyle(element).animationName), 'none');
+assert.deepEqual(await page.locator('#enemy-health-fill').evaluate((element) => [
+  getComputedStyle(element, '::before').animationName,
+  getComputedStyle(element, '::after').animationName,
+]), ['none', 'none'], '减少动态时应冻结药剂气泡和液面');
 
 await page.reload({ waitUntil: 'networkidle' });
 assert.match(await page.locator('#gameover-best').textContent(), /^\d+$/, '刷新后最佳分数仍应为数字');

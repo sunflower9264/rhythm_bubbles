@@ -446,11 +446,18 @@ export class BubbleScene extends Phaser.Scene {
     this.shieldAura.clear().setDepth(46);
     if (snapshot.shield <= 0 || ['menu', 'reward', 'victory', 'game-over'].includes(snapshot.phase)) return;
     this.shieldVisualMax = Math.max(this.shieldVisualMax, snapshot.shield);
-    this.shieldAura.fillStyle(0xffffff, 0.1);
+    this.shieldAura.fillStyle(0xf8ffff, 0.065);
     this.shieldAura.fillRect(0, 0, WIDTH, HEIGHT);
+    this.shieldAura.lineStyle(10, 0xffffff, 0.12);
+    this.shieldAura.strokeRect(5, 5, WIDTH - 10, HEIGHT - 10);
+    this.shieldAura.lineStyle(2, 0xffffff, 0.58);
+    this.shieldAura.strokeRect(2, 2, WIDTH - 4, HEIGHT - 4);
+    this.shieldAura.fillStyle(0xffffff, 0.07);
+    this.shieldAura.fillTriangle(0, 0, 132, 0, 0, 420);
+    this.shieldAura.fillTriangle(WIDTH, HEIGHT, WIDTH - 74, HEIGHT, WIDTH, HEIGHT - 330);
   }
 
-  private animateShieldImpact(blocked: number, broken: boolean): void {
+  private animateShieldImpact(_blocked: number, broken: boolean): void {
     if (this.shieldImpact?.active) this.destroyTransient(this.shieldImpact);
     const barrier = this.add.graphics().setDepth(49);
     this.shieldImpact = barrier;
@@ -458,32 +465,31 @@ export class BubbleScene extends Phaser.Scene {
     const stage = broken ? 4 : { intact: 0, light: 1, damaged: 2, critical: 3, none: 0 }[
       this.getShieldDamageStage(this.latestSnapshot.shield)
     ];
-    barrier.fillStyle(0xffffff, broken ? 0.22 : 0.16);
+    barrier.fillStyle(0xf7ffff, broken ? 0.17 : 0.09);
     barrier.fillRect(0, 0, WIDTH, HEIGHT);
-    barrier.lineStyle(broken ? 18 : 12, 0xeafffd, 0.98);
-    barrier.strokeRect(6, 6, WIDTH - 12, HEIGHT - 12);
-    barrier.fillStyle(0xeafffd, broken ? 0.2 : 0.12);
-    barrier.fillCircle(WIDTH / 2, 760, broken ? 94 : 72);
-    barrier.lineStyle(broken ? 14 : 9, 0x78e4dc, 0.92);
-    barrier.strokeCircle(WIDTH / 2, 760, broken ? 102 : 80);
-    this.drawShieldCracks(barrier, stage, 0.92, 5);
+    barrier.lineStyle(broken ? 9 : 6, 0xffffff, broken ? 0.42 : 0.28);
+    barrier.strokeRect(4, 4, WIDTH - 8, HEIGHT - 8);
+    barrier.lineStyle(2, 0xdfffff, 0.88);
+    barrier.strokeRect(2, 2, WIDTH - 4, HEIGHT - 4);
+    this.drawShieldCracks(barrier, stage, broken ? 1 : 0.88, broken ? 2.4 : 1.7);
     if (broken) {
       this.shieldBreakCount += 1;
-      for (let index = 0; index < 12; index += 1) {
-        const angle = (Math.PI * 2 * index) / 12 - Math.PI / 2;
-        const radius = 112 + (index % 3) * 34;
+      for (let index = 0; index < 18; index += 1) {
+        const angle = (Math.PI * 2 * index) / 18 - Math.PI / 2;
+        const radius = 42 + (index % 4) * 28;
+        const size = 15 + (index % 5) * 4;
         const fragment = this.add.triangle(
           WIDTH / 2 + Math.cos(angle) * radius,
           760 + Math.sin(angle) * radius,
-          -20, 16, 0, -25, 22, 15,
-          index % 2 === 0 ? 0xeafffd : 0x78e4dc,
-          0.88,
-        ).setDepth(50).setAngle(index * 29);
+          -size, size * 0.68, 0, -size, size * 0.82, size * 0.58,
+          0xe9ffff,
+          0.18,
+        ).setStrokeStyle(index % 3 === 0 ? 3 : 2, 0xffffff, 0.82).setDepth(50).setAngle(index * 31);
         this.transientEffects.add(fragment);
         this.destroyAfterTween(fragment, {
-          x: fragment.x + Math.cos(angle) * (95 + (index % 4) * 18),
-          y: fragment.y + Math.sin(angle) * (95 + (index % 4) * 18) + 52,
-          angle: fragment.angle + (index % 2 === 0 ? 125 : -140),
+          x: fragment.x + Math.cos(angle) * (110 + (index % 4) * 24),
+          y: fragment.y + Math.sin(angle) * (110 + (index % 4) * 24) + 64,
+          angle: fragment.angle + (index % 2 === 0 ? 118 : -132),
           alpha: 0,
           duration: this.preferences.reducedMotion ? 120 : 520,
           ease: 'Cubic.Out',
@@ -503,7 +509,6 @@ export class BubbleScene extends Phaser.Scene {
       },
     });
 
-    this.floatCombatText(broken ? '护盾碎裂！' : `护盾格挡 ${blocked}`, WIDTH / 2, 790, '#399f9a', broken ? 40 : 32);
   }
 
   private getShieldDamageStage(shield: number): 'none' | 'intact' | 'light' | 'damaged' | 'critical' {
@@ -522,32 +527,38 @@ export class BubbleScene extends Phaser.Scene {
     width = 3,
   ): void {
     const crackPaths = [
-      [[360, 760], [338, 733], [346, 705], [319, 682], [306, 650]],
-      [[360, 760], [389, 739], [381, 708], [412, 686], [428, 654]],
-      [[360, 760], [336, 790], [347, 821], [320, 847], [307, 882]],
-      [[338, 733], [309, 744], [285, 725], [261, 736]],
-      [[389, 739], [420, 752], [445, 731], [472, 740]],
-      [[360, 760], [393, 787], [384, 818], [417, 848], [434, 885]],
-      [[347, 821], [321, 814], [296, 831], [270, 820]],
-      [[384, 818], [414, 810], [442, 828], [468, 816]],
-      [[360, 760], [363, 808], [349, 853], [367, 895], [354, 941]],
-      [[319, 682], [294, 665], [282, 633], [254, 614]],
-      [[412, 686], [439, 667], [449, 637], [478, 617]],
-      [[320, 847], [291, 866], [278, 899], [246, 917]],
-      [[417, 848], [447, 868], [460, 902], [493, 922]],
-      [[349, 853], [329, 884], [337, 918], [315, 950]],
+      [[360, 760], [346, 737], [352, 712], [329, 690], [338, 658], [309, 628]],
+      [[360, 760], [383, 744], [377, 717], [406, 697], [397, 666], [431, 638]],
+      [[360, 760], [337, 781], [345, 812], [316, 837], [325, 873], [291, 908]],
+      [[360, 760], [390, 780], [383, 811], [415, 839], [406, 875], [445, 909]],
+      [[346, 737], [314, 746], [288, 728], [252, 742], [218, 724]],
+      [[383, 744], [418, 756], [447, 737], [485, 752], [520, 730]],
+      [[329, 690], [300, 676], [286, 644], [250, 631], [234, 594]],
+      [[406, 697], [435, 680], [447, 646], [482, 629], [501, 591]],
+      [[316, 837], [281, 826], [255, 850], [219, 839], [184, 866]],
+      [[415, 839], [449, 826], [477, 850], [512, 837], [550, 861]],
+      [[309, 628], [320, 586], [296, 550], [307, 505], [280, 465], [292, 416]],
+      [[431, 638], [421, 596], [446, 559], [434, 511], [461, 470], [450, 420]],
+      [[291, 908], [307, 950], [286, 992], [300, 1038], [277, 1081]],
+      [[445, 909], [429, 952], [451, 994], [438, 1040], [463, 1085]],
+      [[218, 724], [174, 703], [136, 717], [94, 691], [42, 704]],
+      [[520, 730], [562, 706], [600, 720], [642, 692], [696, 705]],
+      [[292, 416], [268, 371], [282, 321], [255, 274], [270, 219], [246, 166]],
+      [[450, 420], [475, 373], [461, 323], [488, 275], [475, 220], [500, 166]],
+      [[277, 1081], [297, 1124], [279, 1166], [293, 1212], [278, 1276]],
+      [[463, 1085], [444, 1127], [462, 1170], [448, 1215], [463, 1278]],
     ];
-    const visibleCount = [0, 2, 5, 9, crackPaths.length][Math.min(4, Math.max(0, stage))];
+    const visibleCount = [0, 4, 8, 14, crackPaths.length][Math.min(4, Math.max(0, stage))];
     if (visibleCount === 0) return;
 
-    graphics.lineStyle(width + 3, 0xeafffd, alpha * 0.48);
+    graphics.lineStyle(width + 2.2, 0x466877, alpha * 0.3);
     graphics.beginPath();
     for (const path of crackPaths.slice(0, visibleCount)) {
       graphics.moveTo(path[0][0], path[0][1]);
       for (const [x, y] of path.slice(1)) graphics.lineTo(x, y);
     }
     graphics.strokePath();
-    graphics.lineStyle(width, 0x4ebfbd, alpha);
+    graphics.lineStyle(width, 0xffffff, alpha);
     graphics.beginPath();
     for (const path of crackPaths.slice(0, visibleCount)) {
       graphics.moveTo(path[0][0], path[0][1]);
@@ -751,14 +762,17 @@ export class BubbleScene extends Phaser.Scene {
         .setDepth(48)
         .setAngle(timeout ? -4 : 0)
         .setPosition(WIDTH / 2, 735)
-        .setScale(this.enemyRestScaleX * (timeout ? 2.55 : 2.3), this.enemyRestScaleY * (timeout ? 2.55 : 2.3))
-        .setTintFill(0xffffff);
-      this.cameras.main.flash(timeout ? 125 : 95, 255, timeout ? 118 : 150, timeout ? 105 : 126, false);
-      const shockwave = this.add.circle(WIDTH / 2, 700, 54)
-        .setStrokeStyle(timeout ? 18 : 14, timeout ? 0xff6f7d : 0xffffff, 0.86)
-        .setDepth(47);
-      this.transientEffects.add(shockwave);
-      this.destroyAfterTween(shockwave, { scale: 8.5, alpha: 0, duration: 260, ease: 'Cubic.Out' });
+        .setScale(this.enemyRestScaleX * (timeout ? 2.55 : 2.3), this.enemyRestScaleY * (timeout ? 2.55 : 2.3));
+      if (blocked === 0) this.enemy.setTintFill(0xffffff);
+      else this.enemy.clearTint().setTint(this.getEnemyTint());
+      if (blocked === 0) this.cameras.main.flash(timeout ? 125 : 95, 255, timeout ? 118 : 150, timeout ? 105 : 126, false);
+      if (blocked === 0) {
+        const shockwave = this.add.circle(WIDTH / 2, 700, 54)
+          .setStrokeStyle(timeout ? 18 : 14, timeout ? 0xff6f7d : 0xffffff, 0.86)
+          .setDepth(47);
+        this.transientEffects.add(shockwave);
+        this.destroyAfterTween(shockwave, { scale: 8.5, alpha: 0, duration: 260, ease: 'Cubic.Out' });
+      }
       this.time.delayedCall(75, () => {
         if (!this.enemy.active) return;
         this.enemy.clearTint().setTint(this.getEnemyTint());
