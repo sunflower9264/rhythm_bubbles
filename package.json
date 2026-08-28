@@ -1,8 +1,28 @@
 {
-  "name": "MeowPop",
-  "uuid": "47bb64b6-caf9-40b4-8584-430f557b8da1",
-  "version": "3.4.2",
-  "creator": {
-    "version": "3.4.2"
+  "name": "rhythm-bubbles",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "A cute, production-ready visual memory game for the web.",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "generate:audio": "node scripts/generate-audio.mjs",
+    "test:logic": "tsx --test src/game/core/*.test.ts",
+    "test": "npm run test:logic && npm run build"
+  },
+  "dependencies": {
+    "phaser": "3.90.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.3.0",
+    "playwright": "1.62.1",
+    "tsx": "4.20.5",
+    "typescript": "5.9.3",
+    "vite": "7.3.6"
   }
 }

@@ -6,12 +6,14 @@ library/
 temp/
 local/
 build/
+dist/
 profiles/
 native
 #//////////////////////////
 # NPM
 #//////////////////////////
 node_modules/
+output/
 
 #//////////////////////////
 # VSCode
