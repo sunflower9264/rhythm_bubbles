@@ -4,6 +4,7 @@ import type { GameMode, SessionSnapshot, SessionUpdate } from './types';
 export interface Preferences {
   sound: boolean;
   music: boolean;
+  musicVolume: number;
   haptics: boolean;
   reducedMotion: boolean;
 }
@@ -16,6 +17,7 @@ const BEST_SCORES_KEY = 'rhythm-bubbles:best-scores:v2';
 const DEFAULT_PREFERENCES: Preferences = {
   sound: true,
   music: true,
+  musicVolume: 0.4,
   haptics: true,
   reducedMotion: false,
 };

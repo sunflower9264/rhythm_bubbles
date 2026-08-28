@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import { GameController, type Preferences } from './core/GameController';
 import type { SessionSnapshot, SessionUpdate } from './core/types';
 
+type AdjustableSound = Phaser.Sound.BaseSound & { setVolume(value: number): unknown };
+
 interface BubbleView {
   image: Phaser.GameObjects.Image;
   order: Phaser.GameObjects.Text;
@@ -29,7 +31,7 @@ export class BubbleScene extends Phaser.Scene {
   private latestSnapshot!: SessionSnapshot;
   private preferences!: Preferences;
   private unsubscribe?: () => void;
-  private bgm?: Phaser.Sound.BaseSound;
+  private bgm?: AdjustableSound;
   private manualTime = false;
 
   constructor(private readonly controller: GameController) {
@@ -445,7 +447,8 @@ export class BubbleScene extends Phaser.Scene {
       this.bgm?.stop();
       return;
     }
-    if (!this.bgm) this.bgm = this.sound.add('bgm', { loop: true, volume: 0.2 });
+    if (!this.bgm) this.bgm = this.sound.add('bgm', { loop: true, volume: this.preferences.musicVolume }) as AdjustableSound;
+    this.bgm.setVolume(this.preferences.musicVolume);
     if (!this.bgm.isPlaying) this.bgm.play();
   }
 

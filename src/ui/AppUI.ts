@@ -35,11 +35,15 @@ export class AppUI {
     this.onClick('#pause-settings', () => this.openSettings());
     this.onClick('#settings-close', () => this.closeSettings());
 
-    this.root.querySelectorAll<HTMLInputElement>('[data-preference]').forEach((input) => {
+    this.root.querySelectorAll<HTMLInputElement>('input[type="checkbox"][data-preference]').forEach((input) => {
       input.addEventListener('change', () => {
         const key = input.dataset.preference as keyof Preferences;
         this.controller.setPreference(key, input.checked);
       });
+    });
+    this.get<HTMLInputElement>('#music-volume').addEventListener('input', (event) => {
+      const input = event.currentTarget as HTMLInputElement;
+      this.controller.setPreference('musicVolume', Number(input.value) / 100);
     });
 
   }
@@ -99,6 +103,9 @@ export class AppUI {
       const input = this.root.querySelector<HTMLInputElement>(`[data-preference="${key}"]`);
       if (input) input.checked = preferences[key];
     }
+    const musicVolume = Math.round(preferences.musicVolume * 100);
+    this.get<HTMLInputElement>('#music-volume').value = String(musicVolume);
+    this.text('#music-volume-value', `${musicVolume}%`);
 
     for (const mode of ['classic', 'memory', 'sequence'] as GameMode[]) {
       this.text(`#best-${mode}`, String(this.controller.getBestScore(mode)));
@@ -228,6 +235,7 @@ export class AppUI {
           <div class="modal-heading"><div><span class="modal-kicker">按你的方式玩</span><h2 id="settings-title">游戏设置</h2></div><button id="settings-close" class="icon-button" type="button" aria-label="关闭设置">×</button></div>
           <label class="setting-row"><span><b>游戏音效</b><small>点击与反馈声音</small></span><input type="checkbox" data-preference="sound"><i></i></label>
           <label class="setting-row"><span><b>背景音乐</b><small>原创泡泡花园循环曲</small></span><input type="checkbox" data-preference="music"><i></i></label>
+          <label class="volume-row" for="music-volume"><span><b>音乐音量</b><small>拖动调整背景音乐响度</small></span><output id="music-volume-value" for="music-volume">40%</output><input id="music-volume" type="range" min="0" max="100" step="1" value="40" aria-label="音乐音量"></label>
           <label class="setting-row"><span><b>触感反馈</b><small>支持设备上的轻微振动</small></span><input type="checkbox" data-preference="haptics"><i></i></label>
           <label class="setting-row"><span><b>减少动态效果</b><small>减少弹跳、粒子和震动</small></span><input type="checkbox" data-preference="reducedMotion"><i></i></label>
         </div>

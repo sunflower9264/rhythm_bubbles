@@ -115,9 +115,19 @@ await page.screenshot({ path: new URL('05-game-over.png', OUTPUT_DIR).pathname, 
 
 await fastClick(page, '#gameover-home');
 await fastClick(page, '#menu-settings');
+const musicVolume = page.locator('#music-volume');
+assert.equal(await musicVolume.inputValue(), '40', 'music volume must default to the main sound-effect level');
+await musicVolume.fill('65');
+assert.equal(await page.locator('#music-volume-value').textContent(), '65%');
 await page.locator('[data-preference="reducedMotion"]').check();
 await page.locator('#settings-close').tap();
 assert.ok(await page.locator('body.reduce-motion').count());
+
+await page.reload({ waitUntil: 'networkidle' });
+await page.locator('#menu-screen.is-visible').waitFor();
+await fastClick(page, '#menu-settings');
+assert.equal(await page.locator('#music-volume').inputValue(), '65', 'music volume must persist after reload');
+await page.locator('#settings-close').tap();
 
 await page.setViewportSize({ width: 1280, height: 800 });
 await page.waitForTimeout(100);
