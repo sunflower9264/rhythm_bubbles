@@ -26,7 +26,10 @@ const DEFAULT_PREFERENCES: Preferences = {
 export class GameController {
   private readonly session: GameSession;
   private readonly listeners = new Set<Listener>();
-  private preferences = this.readStorage<Preferences>(PREFERENCES_KEY, DEFAULT_PREFERENCES);
+  private preferences = {
+    ...this.readStorage<Preferences>(PREFERENCES_KEY, DEFAULT_PREFERENCES),
+    reducedMotion: false,
+  };
   private bestScore = this.readStorage<number>(BEST_SCORE_KEY, 0);
 
   constructor(random?: RandomSource) {

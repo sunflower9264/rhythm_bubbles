@@ -185,7 +185,7 @@ export class AppUI {
     attackIntent.classList.toggle('is-frozen', attackFrozen);
     attackIntent.classList.toggle('is-broken', snapshot.enemyHp === 0);
 
-    for (const key of ['sound', 'music', 'haptics', 'reducedMotion'] as const) {
+    for (const key of ['sound', 'music', 'haptics'] as const) {
       const input = this.root.querySelector<HTMLInputElement>(`[data-preference="${key}"]`);
       if (input) input.checked = preferences[key];
     }
@@ -490,12 +490,11 @@ export class AppUI {
 
       <section id="settings-modal" class="modal modal--settings" role="dialog" aria-modal="true" aria-labelledby="settings-title">
         <div class="modal-card settings-card">
-          <div class="modal-heading"><div><span class="modal-kicker">按你的方式玩</span><h2 id="settings-title">游戏设置</h2></div><button id="settings-close" class="icon-button" type="button" aria-label="关闭设置">×</button></div>
+          <div class="modal-heading"><h2 id="settings-title">游戏设置</h2><button id="settings-close" class="icon-button" type="button" aria-label="关闭设置">×</button></div>
           <label class="setting-row"><span><b>游戏音效</b><small>点击与反馈声音</small></span><input type="checkbox" data-preference="sound"><i></i></label>
           <label class="setting-row"><span><b>背景音乐</b><small>原创泡泡花园循环曲</small></span><input type="checkbox" data-preference="music"><i></i></label>
           <label class="volume-row" for="music-volume"><span><b>音乐音量</b><small>拖动调整背景音乐响度</small></span><output id="music-volume-value" for="music-volume">40%</output><input id="music-volume" type="range" min="0" max="100" step="1" value="40" style="--volume-progress: 40%" aria-label="音乐音量"></label>
           <label class="setting-row"><span><b>触感反馈</b><small>支持设备上的轻微振动</small></span><input type="checkbox" data-preference="haptics"><i></i></label>
-          <label class="setting-row"><span><b>减少动态效果</b><small>减少弹跳、粒子和震动</small></span><input type="checkbox" data-preference="reducedMotion"><i></i></label>
         </div>
       </section>
 

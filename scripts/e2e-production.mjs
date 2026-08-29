@@ -452,13 +452,9 @@ const musicVolume = page.locator('#music-volume');
 assert.equal(await musicVolume.inputValue(), '40');
 await musicVolume.fill('65');
 assert.equal(await page.locator('#music-volume-value').textContent(), '65%');
-await page.locator('[data-preference="reducedMotion"]').check();
+assert.equal(await page.locator('[data-preference="reducedMotion"]').count(), 0);
+assert.equal(await page.locator('#settings-modal .modal-kicker').count(), 0);
 await page.locator('#settings-close').tap();
-assert.equal(await page.locator('body.reduce-motion').count(), 1);
-assert.deepEqual(await page.locator('#enemy-health-fill').evaluate((element) => [
-  getComputedStyle(element, '::before').animationName,
-  getComputedStyle(element, '::after').animationName,
-]), ['none', 'none'], '减少动态时应冻结药剂气泡和液面');
 
 await page.reload({ waitUntil: 'networkidle' });
 assert.match(await page.locator('#gameover-best').textContent(), /^\d+$/, '刷新后最佳分数仍应为数字');
