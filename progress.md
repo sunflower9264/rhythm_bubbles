@@ -26,6 +26,7 @@ Original prompt: 重写 Rhythm Bubbles，保持核心玩法不变，全面重做
 ## Notes
 
 - 2026-08-29：将五只怪物的专属机制从攻击蓄力状态中彻底拆分：机制在每个新盘面独立激活，攻击条只保留“撞击蓄力 / 撞击警告 / 撞击恢复”；怪物撞屏不会再清除或消费机制目标，破势增伤也改由独立机制状态管理。为星翼魔鬼鱼补充了顺序模式的安全行约束，避免下一颗必点泡泡落入危险行。战斗 Toast 从 900ms 延长到 1600ms，Combo 蓄力削减提示从 720ms 延长到 1200ms，Canvas 战斗浮字增加 360ms 停留。26 项逻辑测试、生产构建、依赖审计、Chromium 五战生产流程和 390×844 战斗截图均已通过；Service Worker 缓存准备升级至 `v56`。
+- 已将 `v56` 部署到 Nginx `18088`：`dist/` 与 `/var/www/rhythm-bubbles/` 文件完全一致，Nginx 配置检查和 reload 通过，本机与公网均返回 `rhythm-bubbles-v56`；公网浏览器烟测进入战斗后确认机制为 `active`、撞击为独立 `charging`，且截图无新增遮挡。
 
 - The legacy Cocos project was removed from the working tree after the web build passed validation; it remains recoverable from Git history.
 - Final checks: 5/5 core tests pass, TypeScript/Vite production build passes, `npm audit --omit=dev` reports 0 vulnerabilities, and `git diff --check` passes.
