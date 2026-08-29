@@ -205,11 +205,11 @@ input:focus-visible + i {
 .icon-button {
   width: 2.72rem;
   height: 2.72rem;
-  border: 1px solid rgba(255, 255, 255, 0.82);
+  border: 3px solid rgba(255, 255, 255, 0.94);
   border-radius: 50%;
-  background: rgba(255, 253, 244, 0.7);
-  box-shadow: 0 8px 22px rgba(68, 101, 113, 0.12);
-  color: var(--blueberry);
+  background: linear-gradient(180deg, #aebcf4, #7388d1);
+  box-shadow: inset 0 2px rgba(255, 255, 255, 0.5), 0 5px 0 #5064a7, 0 10px 20px rgba(82, 103, 168, 0.24);
+  color: white;
   font-size: 1.15rem;
   font-weight: 900;
   cursor: pointer;
@@ -218,12 +218,13 @@ input:focus-visible + i {
 
 .icon-button:hover {
   transform: translateY(-2px) rotate(4deg);
-  box-shadow: 0 11px 25px rgba(68, 101, 113, 0.18);
-  background: #fffdf4;
+  box-shadow: inset 0 2px rgba(255, 255, 255, 0.56), 0 7px 0 #5064a7, 0 13px 24px rgba(82, 103, 168, 0.28);
+  filter: brightness(1.05);
 }
 
 .icon-button:active {
-  transform: translateY(1px) scale(0.94);
+  transform: translateY(4px) scale(0.96);
+  box-shadow: inset 0 2px rgba(255, 255, 255, 0.45), 0 1px 0 #5064a7, 0 5px 11px rgba(82, 103, 168, 0.22);
 }
 
 .brand-block {
@@ -371,21 +372,8 @@ input:focus-visible + i {
   justify-content: center;
   gap: 0.55rem;
   min-height: 3rem;
-  border: 2px solid rgba(255, 255, 255, 0.82);
-  border-radius: 1.1rem 1.45rem 1.1rem 1.35rem;
-  background: rgba(255, 253, 244, 0.72);
-  box-shadow: 0 8px 20px rgba(68, 101, 113, 0.1);
-  color: var(--blueberry);
   font-size: 0.82rem;
   font-weight: 900;
-  cursor: pointer;
-  backdrop-filter: blur(10px);
-  transition: transform 150ms ease, background 150ms ease, box-shadow 150ms ease;
-}
-
-.menu-utility-button:active {
-  transform: scale(0.98);
-  background: #fffdf4;
 }
 
 .mode-card {
@@ -1153,6 +1141,10 @@ input:focus-visible + i {
 }
 
 .reward-option {
+  --reward-top: #d7f8ef;
+  --reward-bottom: #7bd8c8;
+  --reward-edge: #3da79d;
+  --reward-glow: rgba(47, 159, 150, 0.2);
   display: grid;
   grid-template-columns: 3rem minmax(0, 1fr) auto;
   align-items: center;
@@ -1160,17 +1152,37 @@ input:focus-visible + i {
   width: 100%;
   min-height: 4.35rem;
   padding: 0.55rem 0.72rem;
-  border: 2px solid rgba(82, 103, 168, 0.1);
-  border-radius: 1.2rem 0.9rem 1.2rem 1rem;
-  background: linear-gradient(135deg, #eefaf5, #fff8df);
-  box-shadow: 0 7px 16px rgba(72, 102, 112, 0.08);
+  border: 3px solid rgba(255, 255, 255, 0.94);
+  border-radius: 1.3rem 1.05rem 1.3rem 1.12rem;
+  background: linear-gradient(180deg, var(--reward-top), var(--reward-bottom));
+  box-shadow: inset 0 2px rgba(255, 255, 255, 0.55), 0 5px 0 var(--reward-edge), 0 10px 18px var(--reward-glow);
   text-align: left;
   cursor: pointer;
-  transition: transform 150ms ease, box-shadow 150ms ease;
+  transition: transform 150ms ease, box-shadow 150ms ease, filter 150ms ease;
+}
+
+.reward-option:nth-child(2) {
+  --reward-top: #e5dcff;
+  --reward-bottom: #aa91e0;
+  --reward-edge: #7257ad;
+  --reward-glow: rgba(114, 87, 173, 0.2);
+}
+
+.reward-option:nth-child(3) {
+  --reward-top: #ffe8a6;
+  --reward-bottom: #ffad82;
+  --reward-edge: #df726b;
+  --reward-glow: rgba(223, 114, 107, 0.22);
+}
+
+.reward-option:hover {
+  filter: brightness(1.04);
+  transform: translateY(-2px);
 }
 
 .reward-option:active {
-  transform: scale(0.97);
+  transform: translateY(4px) scale(0.985);
+  box-shadow: inset 0 2px rgba(255, 255, 255, 0.45), 0 1px 0 var(--reward-edge), 0 5px 10px var(--reward-glow);
 }
 
 .reward-option > i {
@@ -1289,33 +1301,45 @@ input:focus-visible + i {
 
 .primary-button,
 .secondary-button,
-.text-button {
+.text-button,
+.menu-utility-button {
+  --button-top: #87ebda;
+  --button-bottom: #3eb8ac;
+  --button-edge: #278e89;
+  --button-glow: rgba(47, 159, 150, 0.28);
+  --button-text: #2f5672;
+  position: relative;
   min-height: 3rem;
-  border: 0;
-  border-radius: 1.15rem;
+  padding: 0.72rem 1rem;
+  border: 3px solid rgba(255, 255, 255, 0.94);
+  border-radius: 1.25rem 1.05rem 1.25rem 1.12rem;
+  background: linear-gradient(180deg, var(--button-top), var(--button-bottom));
+  box-shadow: inset 0 2px rgba(255, 255, 255, 0.52), inset 0 -2px rgba(54, 80, 111, 0.08), 0 7px 0 var(--button-edge), 0 13px 23px var(--button-glow);
+  color: var(--button-text);
   font-weight: 900;
+  text-shadow: 0 2px rgba(54, 80, 111, 0.16);
   cursor: pointer;
   transition: transform 150ms ease, box-shadow 150ms ease, filter 150ms ease;
 }
 
 .primary-button {
   width: 100%;
-  padding: 0.75rem 1rem;
-  background: linear-gradient(135deg, var(--coral), #ffad8b);
-  box-shadow: 0 9px 0 #de6973, 0 14px 25px rgba(222, 105, 115, 0.24);
-  color: white;
-  text-shadow: 0 2px rgba(122, 56, 69, 0.15);
 }
 
 .primary-button:hover,
-.secondary-button:hover {
+.secondary-button:hover,
+.text-button:hover,
+.menu-utility-button:hover {
   filter: brightness(1.04);
   transform: translateY(-2px);
 }
 
-.primary-button:active {
-  transform: translateY(6px);
-  box-shadow: 0 3px 0 #de6973, 0 6px 14px rgba(222, 105, 115, 0.2);
+.primary-button:active,
+.secondary-button:active,
+.text-button:active,
+.menu-utility-button:active {
+  transform: translateY(5px) scale(0.99);
+  box-shadow: inset 0 2px rgba(255, 255, 255, 0.44), 0 2px 0 var(--button-edge), 0 6px 12px var(--button-glow);
 }
 
 .button-row {
@@ -1326,18 +1350,48 @@ input:focus-visible + i {
 }
 
 .secondary-button {
+  --button-top: #cfc3f5;
+  --button-bottom: #9279d0;
+  --button-edge: #6650a0;
+  --button-glow: rgba(102, 80, 160, 0.24);
+  --button-text: white;
   padding: 0.7rem 0.8rem;
-  border: 2px solid rgba(82, 103, 168, 0.13);
-  background: #edf8f3;
-  color: var(--blueberry);
 }
 
 .text-button {
+  --button-top: #8ecded;
+  --button-bottom: #5d86cf;
+  --button-edge: #4663a8;
+  --button-glow: rgba(70, 99, 168, 0.23);
+  --button-text: white;
   width: 100%;
   margin-top: 0.55rem;
-  background: transparent;
-  color: var(--ink-soft);
   font-size: 0.78rem;
+}
+
+#restart-button,
+#gameover-restart {
+  --button-top: #ffb19e;
+  --button-bottom: #f0777d;
+  --button-edge: #c95567;
+  --button-glow: rgba(201, 85, 103, 0.26);
+  --button-text: white;
+}
+
+#victory-restart {
+  --button-top: #ffe58c;
+  --button-bottom: #f5a661;
+  --button-edge: #cf784f;
+  --button-glow: rgba(207, 120, 79, 0.25);
+}
+
+#menu-settings,
+#pause-settings {
+  --button-top: #aebcf4;
+  --button-bottom: #7186d0;
+  --button-edge: #5064a7;
+  --button-glow: rgba(82, 103, 168, 0.27);
+  --button-text: white;
 }
 
 .result-face {
