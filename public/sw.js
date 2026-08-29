@@ -1,4 +1,4 @@
-const CACHE_NAME = 'rhythm-bubbles-v61';
+const CACHE_NAME = 'rhythm-bubbles-v62';
 const CORE_ASSETS = [
   './',
   './manifest.webmanifest',
@@ -19,6 +19,7 @@ const CORE_ASSETS = [
   './art/ui/reward-shield.png',
   './art/ui/reward-time.png',
   './art/ui/skill-ultimate.png',
+  './art/ui/skill-tsunami-screen.png',
   './art/ui/skill-blast.png',
   './art/ui/skill-control.png',
   './art/ui/skill-shield.png',

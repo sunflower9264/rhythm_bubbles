@@ -144,13 +144,22 @@ export class AppUI {
     const energyRatio = snapshot.ultimateEnergyMax > 0
       ? snapshot.ultimateEnergy / snapshot.ultimateEnergyMax
       : 0;
-    this.style('#player-energy-fill', 'width', `${Math.max(0, Math.min(1, energyRatio)) * 100}%`);
-    this.text('#player-energy-value', snapshot.ultimateReady ? '点怪物' : `${Math.round(Math.max(0, Math.min(1, energyRatio)) * 100)}%`);
+    const ultimateStageProgress = snapshot.ultimateStage === 3 ? 1 : (snapshot.ultimateStage + 0.45) / 3;
+    const displayedEnergyRatio = snapshot.ultimateActive ? ultimateStageProgress : energyRatio;
+    this.style('#player-energy-fill', 'width', `${Math.max(0, Math.min(1, displayedEnergyRatio)) * 100}%`);
+    const ultimateStateText = snapshot.ultimateActive
+      ? snapshot.ultimateStage === 3 ? '终结潮' : `潮汐 ${snapshot.ultimateStage + 1}/3`
+      : snapshot.ultimateReady ? '释放' : `${Math.round(Math.max(0, Math.min(1, energyRatio)) * 100)}%`;
+    this.text('#player-energy-value', ultimateStateText);
     const energyMeter = this.get('.player-meter--energy');
     energyMeter.classList.toggle('is-ready', snapshot.ultimateReady);
-    const energyLabel = snapshot.ultimateReady
-      ? '泡泡海啸已就绪，点击怪物释放'
-      : `泡泡海啸能量 ${Math.round(Math.max(0, Math.min(1, energyRatio)) * 100)}%`;
+    energyMeter.classList.toggle('is-active', snapshot.ultimateActive);
+    energyMeter.dataset.stage = String(snapshot.ultimateStage);
+    const energyLabel = snapshot.ultimateActive
+      ? `泡泡海啸压制中，第 ${Math.min(3, snapshot.ultimateStage + 1)} 段`
+      : snapshot.ultimateReady
+        ? '泡泡海啸已就绪，点击怪物释放'
+        : `泡泡海啸能量 ${Math.round(Math.max(0, Math.min(1, energyRatio)) * 100)}%`;
     if (energyMeter.getAttribute('aria-label') !== energyLabel) energyMeter.setAttribute('aria-label', energyLabel);
     this.renderTargetBubbles(snapshot.remainingTargets);
     this.get('#enemy-status').classList.toggle('is-boss', snapshot.enemyIsBoss);
@@ -466,7 +475,7 @@ export class AppUI {
             <div class="player-meters">
               <div class="player-meter player-vital"><small>生命</small><i class="health-track health-track--player liquid-meter"><u id="player-health-fill" class="liquid-fill"></u></i><strong><span id="player-health-value">100</span><em>/<span id="player-max-health">100</span></em></strong></div>
               <div class="player-meter player-meter--shield"><small>护盾</small><i class="player-meter-track liquid-meter"><u id="player-shield-fill" class="liquid-fill"></u></i><strong id="player-shield-value">0</strong></div>
-              <div class="player-meter player-meter--energy"><small>能量</small><i class="player-meter-track liquid-meter"><u id="player-energy-fill" class="liquid-fill"></u></i><strong id="player-energy-value">0%</strong></div>
+              <div class="player-meter player-meter--energy" data-stage="0"><small><img src="art/ui/skill-ultimate.png" alt=""><span>海啸</span></small><i class="player-meter-track liquid-meter"><u id="player-energy-fill" class="liquid-fill"></u></i><strong id="player-energy-value">0%</strong></div>
             </div>
           </div>
           <div id="enemy-status" class="enemy-status">

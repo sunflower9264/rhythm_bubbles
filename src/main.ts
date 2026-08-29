@@ -27,6 +27,7 @@ const GAME_RESOURCES = [
   'art/ui/reward-shield.png',
   'art/ui/reward-time.png',
   'art/ui/skill-ultimate.png',
+  'art/ui/skill-tsunami-screen.png',
   'art/ui/skill-blast.png',
   'art/ui/skill-control.png',
   'art/ui/skill-shield.png',

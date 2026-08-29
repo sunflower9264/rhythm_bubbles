@@ -925,6 +925,21 @@ input:focus-visible + i {
   --potion-meniscus: rgba(255, 247, 197, 0.98);
 }
 
+.player-meter--energy small {
+  display: flex;
+  align-items: center;
+  gap: 0.13rem;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.player-meter--energy small img {
+  width: 0.82rem;
+  height: 0.82rem;
+  object-fit: contain;
+  filter: drop-shadow(0 0 0.18rem rgba(99, 214, 197, 0.55));
+}
+
 .player-meter--energy .liquid-fill {
   background: linear-gradient(180deg, #fff4bd 0%, #c9a4ef 36%, #7358b8 100%);
 }
@@ -938,12 +953,54 @@ input:focus-visible + i {
 
 .player-meter--energy.is-ready strong {
   color: #7451b4;
-  font-size: 0.52rem;
+  font-size: 0.58rem;
   text-shadow: 0 0 0.35rem rgba(255, 255, 255, 0.9);
+}
+
+.player-meter--energy.is-ready small img {
+  animation: ultimate-icon-ready 900ms ease-in-out infinite alternate;
+}
+
+.player-meter--energy.is-active .player-meter-track {
+  background: rgba(115, 88, 184, 0.16);
+  box-shadow:
+    inset 0 2px 4px rgba(54, 80, 111, 0.12),
+    0 0 0.58rem rgba(99, 214, 197, 0.72);
+}
+
+.player-meter--energy.is-active .player-meter-track::after {
+  content: "";
+  position: absolute;
+  z-index: 4;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg,
+    transparent 0 32%, rgba(255, 255, 255, 0.82) 32% 34%,
+    transparent 34% 65%, rgba(255, 255, 255, 0.82) 65% 67%, transparent 67%);
+  pointer-events: none;
+}
+
+.player-meter--energy.is-active .liquid-fill {
+  background: linear-gradient(90deg, #63d6c5 0%, #90eadc 32%, #9a7bd1 66%, #ff9f91 100%);
+  animation: ultimate-skill-active 520ms ease-in-out infinite alternate;
+}
+
+.player-meter--energy.is-active strong {
+  color: #e96973;
+  font-size: 0.51rem;
+  text-shadow: 0 0 0.35rem rgba(255, 255, 255, 0.95);
 }
 
 @keyframes ultimate-meter-ready {
   to { filter: brightness(1.12) saturate(1.08); }
+}
+
+@keyframes ultimate-icon-ready {
+  to { transform: scale(1.16) rotate(8deg); filter: drop-shadow(0 0 0.32rem rgba(255, 214, 107, 0.9)); }
+}
+
+@keyframes ultimate-skill-active {
+  to { filter: brightness(1.18) saturate(1.15); }
 }
 
 .player-vital.is-damaged strong {
@@ -1793,6 +1850,8 @@ input:focus-visible + i {
 .reduce-motion .liquid-fill::before,
 .reduce-motion .liquid-fill::after,
 .reduce-motion .player-meter--energy.is-ready .player-meter-track,
+.reduce-motion .player-meter--energy.is-ready small img,
+.reduce-motion .player-meter--energy.is-active .liquid-fill,
 .reduce-motion .volume-row input {
   animation: none !important;
 }
@@ -1848,6 +1907,8 @@ input:focus-visible + i {
   .liquid-fill::before,
   .liquid-fill::after,
   .player-meter--energy.is-ready .player-meter-track,
+  .player-meter--energy.is-ready small img,
+  .player-meter--energy.is-active .liquid-fill,
   .volume-row input {
     animation: none !important;
   }

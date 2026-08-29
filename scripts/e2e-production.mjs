@@ -242,7 +242,7 @@ await ultimatePage.locator('#start-game').tap();
 let ultimateState = await chargeUltimateReady(ultimatePage);
 assert.equal(ultimateState.battle.player.ultimate.energy, 100);
 assert.equal(ultimateState.battle.player.ultimate.ready, true);
-assert.equal(ultimateState.feedback.ultimate.readyAuraVisible, true, '满能量时怪物周围应显示海啸就绪光环');
+assert.equal(ultimateState.feedback.ultimate.screenFxVisible, false, '满能量待释放时怪物周围不应显示技能素材');
 assert.equal(await ultimatePage.locator('#player-energy-value').textContent(), '点怪物');
 await screenshot(ultimatePage, '02c-ultimate-ready.png');
 const ultimateCanvas = await ultimatePage.locator('#game-container canvas').boundingBox();
@@ -257,7 +257,9 @@ await ultimatePage.waitForTimeout(120);
 ultimateState = await readState(ultimatePage);
 assert.equal(ultimateState.battle.player.ultimate.energy, 0, '真实点击怪物后应消耗全部能量');
 assert.equal(ultimateState.battle.player.ultimate.active, true, '真实点击怪物后应启动泡泡海啸');
-assert.equal(ultimateState.feedback.ultimate.waveVisible, true, '海啸释放后应显示生成素材');
+assert.equal(ultimateState.feedback.ultimate.screenFxVisible, true, '海啸释放后应显示全屏技能特效');
+assert.ok(ultimateState.feedback.ultimate.screenFxWidth >= 720, '技能特效应覆盖整个游戏宽度');
+assert.ok(ultimateState.feedback.ultimate.screenFxHeight >= 1280, '技能特效应覆盖整个游戏高度');
 assert.equal(await ultimatePage.locator('#enemy-attack-label').textContent(), '海啸压制');
 await screenshot(ultimatePage, '02d-ultimate-active.png');
 await ultimatePage.evaluate(() => window.advanceTime(700));
@@ -276,13 +278,14 @@ for (let stage = 1; stage <= 3; stage += 1) {
   ultimateState = await readState(ultimatePage);
   if (stage < 3) assert.equal(ultimateState.battle.player.ultimate.stage, stage, `海啸应进入第 ${stage} 段`);
   else assert.ok(ultimateState.battle.player.ultimate.stage === 3
-      || (ultimateState.phase === 'transition' && ultimateState.feedback.ultimate.waveVisible),
+      || (ultimateState.phase === 'transition' && ultimateState.feedback.ultimate.screenFxVisible),
     '海啸第三段即使同时结束战斗也必须保留终结反馈');
 }
 if (ultimateState.phase === 'playing') {
   assert.equal(ultimateState.battle.enemy.mechanicState, 'staggered', '海啸第三段应强制破势');
 }
-assert.equal(ultimateState.feedback.ultimate.waveVisible, true, '海啸终结段仍应保留局部浪潮反馈');
+assert.equal(ultimateState.feedback.ultimate.screenFxVisible, true, '海啸终结段仍应保留全屏浪潮反馈');
+assert.equal(ultimateState.feedback.ultimate.visualStage, 3, '海啸终结段视觉应进入第三阶段');
 await screenshot(ultimatePage, '02e-ultimate-finisher.png');
 if (ultimateState.phase === 'transition' && ultimateState.battle.enemy.hp === 0) {
   await ultimatePage.waitForTimeout(500);
