@@ -164,3 +164,4 @@ Original prompt: 重写 Rhythm Bubbles，保持核心玩法不变，全面重做
 - Phaser 战斗渲染目标和上限均改为 120 FPS，同时保留 100ms 规则节流、低功耗 GPU、静态视觉缓存及菜单/暂停休眠。删除玩家侧 `classic / memory / sequence` 模式、`preview` 阶段、顺序字段、预览计时、旧模式文案和 124 行无引用样式；五战统一为目标持续显示、任意顺序点击。紫莓果冻的按序反制是怪物专属机制，保持不变。
 - 五只怪物加入低幅度上下浮动与轻微挤压的呼吸 Tween；蓄力、受击、破势和撞屏时暂停，回到常态后恢复。动作代际保护会丢弃过期撞屏回调，呼吸只停止自身 Tween，不再误杀其他怪物姿态。子 Agent 代码/规范审查完成，并据此删除固定 4×4 盘面的可空配置包装、补齐动作竞态回归和当前玩法文档。
 - 27 项逻辑测试、TypeScript/Vite 构建、依赖审计、`git diff --check`、移动端性能门槛和 Chromium 随机五怪完整流程通过；E2E 验证 120 FPS 配置、怪物实际呼吸位移、蓄力暂停呼吸、撞屏回位后恢复，以及运行时不再暴露 `mode / order / expectedIndex`。静置战斗测得 WebGL 提交 `5.6/s`、HUD 改写 `0.8/s`；已目视检查常态、机制连线、撞屏和刺豚截图。Service Worker 准备升级为 `v58`，尚未部署。
+- 120 FPS、统一自由点击和怪物呼吸版本已提交并推送，以 Service Worker `v58` 部署到 `http://64.83.41.39:18088`。`dist/` 与 `/var/www/rhythm-bubbles/` 完全一致，Nginx 配置校验和重载通过，本机与公网均返回 `rhythm-bubbles-v58`；公网 Chromium 完整随机五怪流程通过。
