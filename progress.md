@@ -125,3 +125,4 @@ Original prompt: 重写 Rhythm Bubbles，保持核心玩法不变，全面重做
 - 加载页布局与按钮白色文字版本已提交并推送，部署到 `http://64.83.41.39:18088`。`dist/` 与 `/var/www/rhythm-bubbles/` 完全一致，Nginx 配置校验和重载通过，公网 Service Worker 返回 `v48`。
 - Original prompt: 主页菜单，按钮整体向上移动，不测试，直接部署
 - 主页菜单按钮组与艺术字之间的响应式上边距由 `clamp(3.2rem, 8vh, 5rem)` 改为 `clamp(1.1rem, 4vh, 2.8rem)`，紧凑屏幕上边距由 `1.55rem` 改为 `0.8rem`；按钮内部样式、按钮间距和底部角色区不变。Service Worker 准备更新为 `v49`。按用户要求不运行测试或截图检查，仅执行部署所需的生产构建。
+- 主页按钮组上移版本已提交并推送，部署到 `http://64.83.41.39:18088`。`dist/` 与 `/var/www/rhythm-bubbles/` 完全一致，Nginx 配置校验和重载通过，公网 Service Worker 返回 `v49`。
