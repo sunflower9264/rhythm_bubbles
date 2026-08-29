@@ -204,7 +204,7 @@ export class AppUI {
       this.flashToast('失误超限 · 更换泡泡');
       this.announce('失误超过三次，正在生成新一轮泡泡');
     }
-    if (update.effect === 'reward-picked') this.flashToast(snapshot.enemyIsBoss ? 'Boss 战' : `第 ${snapshot.battle} 战`);
+    if (update.effect === 'reward-picked') this.flashToast(snapshot.enemyIsBoss ? 'Boss 战' : `第 ${snapshot.battle} 战`, true);
     if (update.effect === 'start') this.announce(`${snapshot.mode ? MODE_LABEL[snapshot.mode] : ''}开始`);
     if (['mistake', 'counter-miss', 'enemy-impact', 'timeout-impact'].includes(update.effect) && snapshot.phase === 'game-over') this.announce('挑战失败');
     if (update.effect === 'victory') this.announce('挑战成功');

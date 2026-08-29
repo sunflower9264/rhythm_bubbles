@@ -15,7 +15,7 @@ const WIDTH = 720;
 const HEIGHT = 1280;
 const BOARD_CENTER_Y = 920;
 const BOARD_SIZE = 604;
-const ENEMY_CENTER_Y = 465;
+const ENEMY_CENTER_Y = 450;
 const ENEMY_RAGE_TINT = 0xff6f7d;
 
 export class BubbleScene extends Phaser.Scene {
@@ -45,6 +45,7 @@ export class BubbleScene extends Phaser.Scene {
   private shieldBreakCount = 0;
   private shieldVisualMax = 0;
   private shieldImpact?: Phaser.GameObjects.Graphics;
+  private enemyCenterY = ENEMY_CENTER_Y;
 
   constructor(private readonly controller: GameController) {
     super({ key: 'BubbleScene' });
@@ -72,6 +73,7 @@ export class BubbleScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.enemyCenterY = this.resolveEnemyCenterY();
     this.cameras.main.setBackgroundColor('#cdefe4');
     this.background = this.add.image(WIDTH / 2, HEIGHT / 2, 'garden-bg');
     this.background.setDisplaySize(WIDTH, HEIGHT);
@@ -80,7 +82,7 @@ export class BubbleScene extends Phaser.Scene {
     this.createBubbleTexture('bubble-normal', ['#d8fff3', '#79dcca', '#45b9ac']);
     this.createBubbleTexture('bubble-target', ['#fff6a8', '#ffb96f', '#ff7f82']);
     this.createDropletTexture();
-    this.enemy = this.add.image(WIDTH / 2, ENEMY_CENTER_Y, 'jelly-enemy').setDisplaySize(260, 260).setDepth(7).setVisible(false);
+    this.enemy = this.add.image(WIDTH / 2, this.enemyCenterY, 'jelly-enemy').setDisplaySize(288, 288).setDepth(7).setVisible(false);
     this.dropletEmitter = this.add.particles(0, 0, 'bubble-droplet', {
       emitting: false,
       lifespan: { min: 300, max: 460 },
@@ -145,6 +147,8 @@ export class BubbleScene extends Phaser.Scene {
         alpha: Number(this.enemy.alpha.toFixed(2)),
         x: Math.round(this.enemy.x),
         y: Math.round(this.enemy.y),
+        displayWidth: Math.round(this.enemy.displayWidth),
+        displayHeight: Math.round(this.enemy.displayHeight),
         scaleX: Number(this.enemy.scaleX.toFixed(3)),
         scaleY: Number(this.enemy.scaleY.toFixed(3)),
       } : null,
@@ -421,7 +425,7 @@ export class BubbleScene extends Phaser.Scene {
       const active = order === snapshot.enemyIntentCursor;
       const lane = order - (count - 1) / 2;
       const startX = WIDTH / 2 + lane * 24;
-      const startY = ENEMY_CENTER_Y + 62;
+      const startY = this.enemyCenterY + 62;
       const endX = view.image.x;
       const endY = view.image.y;
       if (snapshot.enemyMechanic === 'shell') {
@@ -678,22 +682,23 @@ export class BubbleScene extends Phaser.Scene {
   private syncEnemy(snapshot: SessionSnapshot, update: SessionUpdate): void {
     if (snapshot.battle === this.currentEnemyBattle && update.effect !== 'start') return;
     this.currentEnemyBattle = snapshot.battle;
-    const size = snapshot.enemyIsBoss ? 310 : 250 + snapshot.battle * 8;
+    this.enemyCenterY = this.resolveEnemyCenterY();
+    const size = snapshot.enemyIsBoss ? 340 : 280 + snapshot.battle * 8;
     this.tweens.killTweensOf(this.enemy);
     this.enemy
       .setTexture(snapshot.enemyTexture)
       .setVisible(true)
       .setAlpha(1)
       .setAngle(0)
-      .setPosition(WIDTH / 2, ENEMY_CENTER_Y)
+      .setPosition(WIDTH / 2, this.enemyCenterY)
       .setDisplaySize(size, size)
       .setDepth(7)
       .setTint(this.getEnemyTint());
     this.enemyRestScaleX = this.enemy.scaleX;
     this.enemyRestScaleY = this.enemy.scaleY;
     if (!this.preferences.reducedMotion) {
-      this.enemy.setAlpha(0).setScale(this.enemyRestScaleX * 0.72, this.enemyRestScaleY * 0.72).setY(ENEMY_CENTER_Y - 14);
-      this.tweens.add({ targets: this.enemy, alpha: 1, y: ENEMY_CENTER_Y, scaleX: this.enemyRestScaleX, scaleY: this.enemyRestScaleY, duration: 340, ease: 'Back.Out' });
+      this.enemy.setAlpha(0).setScale(this.enemyRestScaleX * 0.72, this.enemyRestScaleY * 0.72).setY(this.enemyCenterY - 14);
+      this.tweens.add({ targets: this.enemy, alpha: 1, y: this.enemyCenterY, scaleX: this.enemyRestScaleX, scaleY: this.enemyRestScaleY, duration: 340, ease: 'Back.Out' });
     }
   }
 
@@ -701,7 +706,7 @@ export class BubbleScene extends Phaser.Scene {
     if (!this.enemy.visible) return;
     if (!this.preferences.reducedMotion) {
       this.tweens.killTweensOf(this.enemy);
-      this.enemy.setDepth(7).setPosition(WIDTH / 2, ENEMY_CENTER_Y).setScale(this.enemyRestScaleX, this.enemyRestScaleY);
+      this.enemy.setDepth(7).setPosition(WIDTH / 2, this.enemyCenterY).setScale(this.enemyRestScaleX, this.enemyRestScaleY);
       this.enemy.setTintFill(0xffffff);
       this.tweens.add({
         targets: this.enemy,
@@ -714,7 +719,7 @@ export class BubbleScene extends Phaser.Scene {
         onComplete: () => {
           this.enemy.clearTint();
           this.enemy.setTint(this.getEnemyTint()).setX(WIDTH / 2);
-          if (defeated) this.tweens.add({ targets: this.enemy, alpha: 0, y: ENEMY_CENTER_Y - 30, angle: 7, duration: 420, ease: 'Back.In' });
+          if (defeated) this.tweens.add({ targets: this.enemy, alpha: 0, y: this.enemyCenterY - 30, angle: 7, duration: 420, ease: 'Back.In' });
           else if (this.latestSnapshot.enemyAttackState === 'windup') this.setEnemyWindupPose();
           else this.restoreEnemyPose();
         },
@@ -723,16 +728,16 @@ export class BubbleScene extends Phaser.Scene {
         this.dropletEmitter.explode(42, this.enemy.x, this.enemy.y);
       }
     }
-    this.floatCombatText(defeated ? '完美收尾！' : `-${damage}`, WIDTH / 2, ENEMY_CENTER_Y - 40, defeated ? '#ff6f7d' : '#7358b8', defeated ? 42 : 32);
+    this.floatCombatText(defeated ? '完美收尾！' : `-${damage}`, WIDTH / 2, this.enemyCenterY - 40, defeated ? '#ff6f7d' : '#7358b8', defeated ? 42 : 32);
   }
 
   private animateEnemyWindup(): void {
     if (this.preferences.reducedMotion || !this.enemy.visible) return;
     this.tweens.killTweensOf(this.enemy);
-    this.enemy.clearTint().setTint(ENEMY_RAGE_TINT).setDepth(8).setPosition(WIDTH / 2, ENEMY_CENTER_Y).setAngle(0);
+    this.enemy.clearTint().setTint(ENEMY_RAGE_TINT).setDepth(8).setPosition(WIDTH / 2, this.enemyCenterY).setAngle(0);
     this.tweens.add({
       targets: this.enemy,
-      y: ENEMY_CENTER_Y + 12,
+      y: this.enemyCenterY + 12,
       scaleX: this.enemyRestScaleX * 1.16,
       scaleY: this.enemyRestScaleY * 0.82,
       duration: Math.min(620, this.latestSnapshot.enemyAttackWindupMs * 0.72),
@@ -745,7 +750,7 @@ export class BubbleScene extends Phaser.Scene {
       .clearTint()
       .setTint(ENEMY_RAGE_TINT)
       .setDepth(8)
-      .setPosition(WIDTH / 2, ENEMY_CENTER_Y + 12)
+      .setPosition(WIDTH / 2, this.enemyCenterY + 12)
       .setScale(this.enemyRestScaleX * 1.16, this.enemyRestScaleY * 0.82);
   }
 
@@ -776,7 +781,7 @@ export class BubbleScene extends Phaser.Scene {
         this.enemy.clearTint().setTint(this.getEnemyTint());
         this.tweens.add({
           targets: this.enemy,
-          y: ENEMY_CENTER_Y,
+          y: this.enemyCenterY,
           scaleX: this.enemyRestScaleX,
           scaleY: this.enemyRestScaleY,
           angle: 0,
@@ -797,7 +802,7 @@ export class BubbleScene extends Phaser.Scene {
       this.enemy.clearTint().setTint(0x9bf1e2).setDepth(8);
       this.tweens.add({
         targets: this.enemy,
-        y: ENEMY_CENTER_Y - 22,
+        y: this.enemyCenterY - 22,
         angle: -6,
         scaleX: this.enemyRestScaleX * 1.1,
         scaleY: this.enemyRestScaleY * 0.88,
@@ -810,7 +815,7 @@ export class BubbleScene extends Phaser.Scene {
       this.dropletEmitter.explode(22, this.enemy.x, this.enemy.y);
     }
     const reductionPercent = Math.round(reduction * 1000) / 10;
-    this.floatCombatText(`-${damage} · 蓄力 -${reductionPercent}%`, WIDTH / 2, ENEMY_CENTER_Y - 48, '#2f9f96', 34);
+    this.floatCombatText(`-${damage} · 蓄力 -${reductionPercent}%`, WIDTH / 2, this.enemyCenterY - 48, '#2f9f96', 34);
   }
 
   private animateEnemyBreak(): void {
@@ -820,7 +825,7 @@ export class BubbleScene extends Phaser.Scene {
       this.enemy.clearTint().setTint(0x9bf1e2).setDepth(8).setAngle(-8);
       this.tweens.add({
         targets: this.enemy,
-        y: ENEMY_CENTER_Y - 28,
+        y: this.enemyCenterY - 28,
         scaleX: this.enemyRestScaleX * 1.18,
         scaleY: this.enemyRestScaleY * 0.76,
         angle: 8,
@@ -831,7 +836,7 @@ export class BubbleScene extends Phaser.Scene {
       });
       this.dropletEmitter.explode(34, this.enemy.x, this.enemy.y);
     }
-    this.floatCombatText('破势！伤害 ×1.5', WIDTH / 2, ENEMY_CENTER_Y - 54, '#2f9f96', 38);
+    this.floatCombatText('破势！伤害 ×1.5', WIDTH / 2, this.enemyCenterY - 54, '#2f9f96', 38);
   }
 
   private floatPlayerDamage(prefix: string): void {
@@ -850,12 +855,21 @@ export class BubbleScene extends Phaser.Scene {
       .setDepth(7)
       .setAlpha(1)
       .setAngle(0)
-      .setPosition(WIDTH / 2, ENEMY_CENTER_Y)
+      .setPosition(WIDTH / 2, this.enemyCenterY)
       .setScale(this.enemyRestScaleX, this.enemyRestScaleY);
   }
 
   private getEnemyTint(): number {
     return 0xffffff;
+  }
+
+  private resolveEnemyCenterY(): number {
+    const canvasRect = this.game.canvas.getBoundingClientRect();
+    const enemyHudRect = document.getElementById('enemy-status')?.getBoundingClientRect();
+    if (!enemyHudRect || canvasRect.height <= 0) return ENEMY_CENTER_Y;
+    const boardTop = canvasRect.top + (BOARD_CENTER_Y - BOARD_SIZE / 2) / HEIGHT * canvasRect.height;
+    const screenCenter = (enemyHudRect.bottom + boardTop) / 2;
+    return Phaser.Math.Clamp((screenCenter - canvasRect.top) / canvasRect.height * HEIGHT, 390, 520);
   }
 
   private floatCombatText(message: string, x: number, y: number, color: string, size: number): void {

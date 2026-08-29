@@ -57,9 +57,9 @@ assert.equal(state.battle.enemy.maxHp, 150);
 assert.equal(state.battle.player.attack, 8);
 assert.equal(state.battle.player.mistakeDamage, 5);
 assert.equal(state.battle.enemy.poise, 2);
-await page.waitForFunction(() => Math.abs(JSON.parse(window.render_game_to_text()).feedback.enemy.y - 465) <= 1);
+await page.waitForTimeout(420);
 state = await readState(page);
-assert.ok(Math.abs(state.feedback.enemy.y - 465) <= 1, '怪物应位于怪物 HUD 与泡泡盘面之间');
+assert.ok(Math.abs(state.feedback.enemy.displayWidth - 288) <= 1, '普通怪物应比上一版更大');
 assert.deepEqual(state.grid, { rows: 4, cols: 4 }, '所有战斗应固定使用 4x4 泡泡盘面');
 assert.equal(state.timerMs, 0, '盘面倒计时应已取消');
 assert.equal(await page.locator('.liquid-meter').count(), 6, '玩家三状态、敌人生命、蓄力和 Combo 应统一使用液体数值条');
@@ -83,10 +83,12 @@ assert.ok(enemyHudBox.y + enemyHudBox.height <= targetBubblesBox.y, '可消耗�
 assert.ok(Math.abs(targetBubblesBox.x - enemyHudBox.x) <= 8, '可消耗泡泡应从怪物 HUD 左侧开始排列');
 assert.ok(Math.abs(avatarBox.width - avatarBox.height) <= 1, '玩家头像应为圆形');
 assert.ok(Math.abs(avatarBox.height - metersBox.height) <= 2, '三条玩家状态的总高应与头像一致');
-const enemyScreenCenterY = gameplayCanvasBox.y + 465 / 1280 * gameplayCanvasBox.height;
+const enemyScreenCenterY = gameplayCanvasBox.y + state.feedback.enemy.y / 1280 * gameplayCanvasBox.height;
 const boardScreenTop = gameplayCanvasBox.y + (920 - 604 / 2) / 1280 * gameplayCanvasBox.height;
 assert.ok(enemyScreenCenterY > targetBubblesBox.y + targetBubblesBox.height && enemyScreenCenterY < boardScreenTop,
   '怪物中心应位于怪物 HUD 下方的目标泡泡与玩法盘面之间');
+assert.ok(Math.abs(enemyScreenCenterY - (enemyHudBox.y + enemyHudBox.height + boardScreenTop) / 2) <= 2,
+  '怪物应在怪物 HUD 与泡泡外框之间垂直居中');
 assert.ok(Math.abs((enemyNameBox.x + enemyNameBox.width / 2) - (enemyHudBox.x + enemyHudBox.width / 2)) <= 2,
   '怪物名称应在怪物 HUD 中几何居中');
 const enemyPotionStyle = await page.locator('#enemy-health-fill').evaluate((element) => ({
@@ -215,6 +217,7 @@ let sawBattle4SingleHit = false;
 let sawBattle5SingleHit = false;
 let sawComboImpact = false;
 let sawShieldBreak = false;
+let sawBattleToast = false;
 let primedCombo = false;
 for (let guard = 0; guard < 1400; guard += 1) {
   state = await readState(page);
@@ -243,6 +246,21 @@ for (let guard = 0; guard < 1400; guard += 1) {
     assert.equal(state.battle.rewards.length, 3);
     const shieldIndex = state.battle.rewards.findIndex((reward) => reward.id === 'shield');
     await page.evaluate((index) => window.selectReward(index), state.battle.current === 1 && shieldIndex >= 0 ? shieldIndex : 0);
+    if (!sawBattleToast) {
+      const battleToast = page.locator('#level-toast.is-combat.is-active');
+      await battleToast.waitFor({ state: 'visible' });
+      assert.equal(await battleToast.textContent(), '第 2 战');
+      await battleToast.evaluate((element) => element.getAnimations().forEach((animation) => {
+        animation.currentTime = 450;
+        animation.pause();
+      }));
+      const battleToastBox = await battleToast.boundingBox();
+      assert.ok(battleToastBox && battleToastBox.x < 40 && battleToastBox.x + battleToastBox.width < 195,
+        '第几战提示应只在屏幕左侧显示');
+      await screenshot(page, '06-battle-toast-left.png');
+      await battleToast.evaluate((element) => element.getAnimations().forEach((animation) => animation.play()));
+      sawBattleToast = true;
+    }
     continue;
   }
   if (state.phase !== 'playing') break;
@@ -336,6 +354,7 @@ for (let guard = 0; guard < 1400; guard += 1) {
   }
   if (state.battle.current === 5 && !sawBattle5SingleHit) {
     assert.equal('hitsRequired' in state.bubbles[target], false);
+    assert.equal(state.feedback.enemy.displayWidth, 340, 'Boss 应比上一版更大');
     await page.evaluate((index) => window.selectBubble(index), target);
     const afterHit = await readState(page);
     assert.equal(afterHit.bubbles[target].cleared, true);
@@ -374,6 +393,7 @@ assert.ok(sawBattle4SingleHit);
 assert.ok(sawBattle5SingleHit);
 assert.ok(sawComboImpact);
 assert.ok(sawShieldBreak);
+assert.ok(sawBattleToast);
 await page.locator('#victory-modal.is-visible').waitFor();
 await screenshot(page, '09-victory.png');
 

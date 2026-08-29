@@ -1,4 +1,4 @@
-const CACHE_NAME = 'rhythm-bubbles-v37';
+const CACHE_NAME = 'rhythm-bubbles-v38';
 const CORE_ASSETS = [
   './',
   './manifest.webmanifest',
