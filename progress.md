@@ -134,3 +134,4 @@ Original prompt: 重写 Rhythm Bubbles，保持核心玩法不变，全面重做
 - 使用内置 imagegen 以生图按钮和当前设置页为参考，生成可九宫格拉伸的统一弹窗底板 `public/art/ui/modal-frame.png`：奶油白内容区、薄荷泡泡凝胶边、白色贴纸外沿，四角配海星、珊瑚、海草和珍珠泡泡，中段保持干净以适配不同高度。
 - 暂停、失败、奖励、胜利、游戏设置和怪物图鉴 6 个弹窗统一改用新边框，删除旧 CSS 实心描边、圆角、底色和盒阴影，保留原内容、交互与响应式尺寸。Service Worker 准备更新为 `v51`。
 - 生产构建和 `git diff --check` 通过；390×844 Chromium 设置页与暂停页截图已目视检查，长/短弹窗四角无明显变形，内容未压线，6 个 `.modal-card` 的 `border-image-source` 均指向 `modal-frame.png`，控制台无错误。按“简单测试”要求未跑完整五战回归。
+- 弹窗海洋边框版本已提交并推送，部署到 `http://64.83.41.39:18088`。`dist/` 与 `/var/www/rhythm-bubbles/` 完全一致，Nginx 配置校验和重载通过，公网 Service Worker 返回 `v51`，弹窗边框 PNG 返回 HTTP 200。
