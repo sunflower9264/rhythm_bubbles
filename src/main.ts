@@ -19,6 +19,7 @@ const GAME_RESOURCES = [
   'art/ui/button-violet.png',
   'art/ui/button-blue.png',
   'art/ui/button-gold.png',
+  'art/ui/modal-frame.png',
   'art/bubble-garden.webp',
   'art/jelly-enemy.png',
   'art/angler-enemy.png',

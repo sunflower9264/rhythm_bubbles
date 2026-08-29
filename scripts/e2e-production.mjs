@@ -448,6 +448,10 @@ await screenshot(page, '09-victory.png');
 
 await page.locator('#victory-home').tap();
 await page.locator('#menu-settings').tap();
+const modalFrames = await page.locator('.modal-card').evaluateAll((elements) =>
+  elements.map((element) => getComputedStyle(element).borderImageSource));
+assert.equal(modalFrames.length, 6);
+assert.ok(modalFrames.every((source) => /modal-frame\.png/.test(source)), '所有弹窗应共用生图海洋边框');
 const musicVolume = page.locator('#music-volume');
 assert.equal(await musicVolume.inputValue(), '40');
 await musicVolume.fill('65');

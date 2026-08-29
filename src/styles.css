@@ -1383,11 +1383,13 @@ input:focus-visible + i {
 
 .modal-card {
   width: 100%;
-  padding: clamp(1.35rem, 6vw, 2rem);
-  border: 3px solid rgba(255, 255, 255, 0.88);
-  border-radius: 2.2rem 1.35rem 2.2rem 1.55rem;
-  background: rgba(255, 252, 239, 0.95);
-  box-shadow: 0 26px 75px rgba(58, 73, 104, 0.25);
+  padding: clamp(1.2rem, 5.2vw, 1.7rem);
+  border: clamp(0.85rem, 3.8vw, 1.15rem) solid transparent;
+  border-image: url('/art/ui/modal-frame.png') 130 fill / 1.75 / 0.22rem stretch;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  filter: drop-shadow(0 1.35rem 1.8rem rgba(58, 73, 104, 0.24));
   text-align: center;
   transform: translateY(14px) scale(0.96);
   transition: transform 240ms cubic-bezier(.2, .9, .25, 1.25);
