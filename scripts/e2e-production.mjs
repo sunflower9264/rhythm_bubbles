@@ -114,10 +114,17 @@ const targetBubblesBox = await page.locator('#target-bubbles').boundingBox();
 const enemyNameBox = await page.locator('#enemy-name').boundingBox();
 const avatarBox = await page.locator('#pause-button.player-avatar').boundingBox();
 const metersBox = await page.locator('.player-meters').boundingBox();
+const firstPlayerMeterBox = await page.locator('.player-meter').first().boundingBox();
+const lastPlayerMeterBox = await page.locator('.player-meter').last().boundingBox();
+const shieldLabelBox = await page.locator('.player-meter--shield small').boundingBox();
 const gameplayCanvasBox = await page.locator('#game-container canvas').boundingBox();
-assert.ok(playerHudBox && enemyHudBox && targetBubblesBox && enemyNameBox && avatarBox && metersBox && gameplayCanvasBox);
+assert.ok(playerHudBox && enemyHudBox && targetBubblesBox && enemyNameBox && avatarBox && metersBox
+  && firstPlayerMeterBox && lastPlayerMeterBox && shieldLabelBox && gameplayCanvasBox);
 const enemyHealthBox = await page.locator('.health-track--enemy').boundingBox();
-assert.ok(enemyHealthBox);
+const enemyHeadingBox = await page.locator('.enemy-heading').boundingBox();
+const enemyAttackBox = await page.locator('#enemy-attack-intent').boundingBox();
+const enemyAttackTrackBox = await page.locator('#enemy-attack-intent > i').boundingBox();
+assert.ok(enemyHealthBox && enemyHeadingBox && enemyAttackBox && enemyAttackTrackBox);
 const hudFrameArt = await page.locator('.player-status, #enemy-status').evaluateAll((elements) =>
   elements.map((element) => getComputedStyle(element).backgroundImage));
 assert.match(hudFrameArt[0], /hud-player-frame\.png/, '玩家 HUD 应使用生图海洋边框');
@@ -133,10 +140,20 @@ assert.ok(enemyHudBox.y + enemyHudBox.height <= targetBubblesBox.y, '可消耗�
 assert.ok(Math.abs(targetBubblesBox.x - enemyHudBox.x) <= 8, '可消耗泡泡应从怪物 HUD 左侧开始排列');
 assert.ok(Math.abs(avatarBox.width - avatarBox.height) <= 1, '玩家头像应为圆形');
 assert.ok(Math.abs(avatarBox.height - metersBox.height) <= 2, '三条玩家状态的总高应与头像一致');
+assert.ok(firstPlayerMeterBox.y - playerHudBox.y >= 14, '生命条与玩家 HUD 上边框应保留安全距离');
+assert.ok(playerHudBox.y + playerHudBox.height - (lastPlayerMeterBox.y + lastPlayerMeterBox.height) >= 14,
+  '能量条与玩家 HUD 下边框应保留安全距离');
+assert.ok(shieldLabelBox.x - (avatarBox.x + avatarBox.width) >= 12,
+  '头像圆形接口不得遮挡护盾文字');
 assert.ok(playerHudBox.x + playerHudBox.width - (metersBox.x + metersBox.width) >= 48,
   '玩家 HUD 内容不得进入右侧角饰安全区');
 assert.ok(enemyHudBox.x + enemyHudBox.width - (enemyHealthBox.x + enemyHealthBox.width) >= 36,
   '怪物 HUD 内容不得进入右侧角饰安全区');
+assert.ok(enemyHeadingBox.y - enemyHudBox.y >= 10, '怪物名称与 HUD 上边框应保留安全距离');
+assert.ok(enemyHudBox.y + enemyHudBox.height - (enemyAttackBox.y + enemyAttackBox.height) >= 10,
+  '怪物蓄力技能与 HUD 下边框应保留安全距离');
+assert.ok(enemyAttackTrackBox.height >= enemyHealthBox.height * 0.8,
+  '怪物蓄力进度条高度应接近生命条');
 const boardFrameLeft = gameplayCanvasBox.x + (360 - 680 / 2) / 720 * gameplayCanvasBox.width;
 const firstBubbleCenter = 360 - 470 / 2 + 470 / 4 / 2;
 const bubbleRadius = ((604 - 70) / 4 * 0.76) / 2;
