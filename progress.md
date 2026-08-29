@@ -103,3 +103,4 @@ Original prompt: 重写 Rhythm Bubbles，保持核心玩法不变，全面重做
 - Original prompt: 可以啊，加吧，布局和站位要符合游戏设计。改完部署，不用复杂测试
 - 主菜单增加“开战前对峨舞台”：左下方是三只薄荷泡泡小队，右下方展示本次随机首只怪物的真实透明素材，中间是水流弧线、光点和能量碰撞；角色区域与标题/按钮分层，并为 390×844 和 320×568 做了紧凑缩放，减少动态模式时沿用全局静止规则。首只怪物随机变换但不介入战斗随机顺序。Service Worker 更新为 `v44`。
 - 生产构建、本地 390×844/320×568 Chromium 截图和控制台错误检查通过，已目视检查 `output/e2e/v44-menu-phone.png` 与 `output/e2e/v44-menu-compact.png`；通用 Skill 脚本因其所在目录无法解析项目 Playwright 依赖而未使用，已用项目现有 Playwright 完成同等截图检查。
+- 主菜单对峨舞台已提交并推送，部署到 `http://64.83.41.39:18088`。`dist/` 与 `/var/www/rhythm-bubbles/` 完全一致，Nginx 配置校验和重载通过，公网 Service Worker 返回 `v44`。
