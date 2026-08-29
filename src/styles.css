@@ -313,7 +313,7 @@ input:focus-visible + i {
   display: grid;
   gap: clamp(1.55rem, 4vh, 2.35rem);
   width: min(100%, 19rem);
-  margin-top: clamp(3.2rem, 8vh, 5rem);
+  margin-top: clamp(1.1rem, 4vh, 2.8rem);
 }
 
 .menu-start {
@@ -1884,7 +1884,7 @@ input:focus-visible + i {
   .game-logo { scale: 0.88; }
   .mode-list { gap: 0.42rem; }
   .mode-card { min-height: 4.25rem; padding-block: 0.5rem; }
-  .menu-actions { gap: 0.75rem; margin-top: 1.55rem; }
+  .menu-actions { gap: 0.75rem; margin-top: 0.8rem; }
   .menu-actions button { min-height: 3.05rem; padding-block: 0.5rem; }
   #start-game { min-height: 3.5rem; }
   .menu-encounter { height: 10.6rem; }
