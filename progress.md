@@ -6,7 +6,7 @@ Original prompt: 重写 Rhythm Bubbles，保持核心玩法不变，全面重做
 - Form factor: mobile-first portrait H5, centered and framed on desktop.
 - Visual direction: cute bubble cloud garden; generated art only, no third-party image assets.
 - Audio direction: deterministic procedural WAV generation committed with its source script.
-- Gameplay invariant: one run automatically progresses through classic / memory / sequence; every target clears in one valid hit for +10 scoring, mistakes cost shield/health, timeout causes a heavy hit and refreshes the board, and only zero health ends the run.
+- Gameplay invariant: one run automatically progresses through classic / memory / sequence; every target clears in one valid hit for +10 scoring, mistakes cost shield/health, a board refreshes when all targets are cleared or valid taps reach `targetCount + 3`, and only zero health ends the run.
 - Battle loop: correct bubbles deal combo damage while enemies charge attacks in real time; combos and board clears push the charge meter back without hard-cancelling the attack. Preview, pause, transition, and reward selection freeze the attack clock. Four reward choices rotate through three-option drafts; battle five is the boss and ends in victory.
 
 ## Status
@@ -77,3 +77,6 @@ Original prompt: 重写 Rhythm Bubbles，保持核心玩法不变，全面重做
 - 按反馈重做护盾：移除中心实心圆、圆环冲击波与格挡时的怪物白色剪影，常态改为铺满画布的半透明玻璃护罩和边缘反光；受击只显示从碰撞中心向外扩散的细白裂纹，护盾耗尽时生成半透明玻璃碎片，格挡时不再叠加整屏闪光。药剂槽和玻璃护盾全部改动已提交并推送，Service Worker 更新为 `v32`，部署到 `http://64.83.41.39:18088`；部署目录与 `dist/` 完全一致，Nginx 校验和重载通过，公开端点完整 Chromium 流程通过。22 项逻辑测试、生产构建、依赖审计、项目本地 Playwright 客户端和本地 Chromium/Firefox/WebKit 完整流程均通过，并已目视检查 390×844 下护盾完整、受击、裂纹退场和碎裂状态。
 - 重排战斗 HUD：玩家状态置顶并改为生命、护盾、能量（当前盘面目标完成度）三条药剂槽，怪物状态独立为第二行且名称几何居中；删除战数、敌方伤害/架势、得分、攻击、下方护盾值和失误次数，目标操作提示与“剩余 N”拆分为怪物 HUD 下方的独立提示胶囊。护盾状态新增真实 `maxShield` 容量用于 HUD 比例，Service Worker 缓存准备更新为 `v33`。23 项逻辑测试、构建、依赖审计、项目本地 Playwright 客户端及 Chromium/Firefox/WebKit 完整五战流程通过；已目视检查 390×844 的开局、Combo、护盾受击和 Boss 布局，三层 HUD 无重叠，怪名中心误差为 0。本轮未部署。
 - 移除正确与错误点击中的邻居波动缩放：点击反馈现在只作用于被点击泡泡，其他泡泡保持静止；保留当前泡泡的按压、弹破、粒子、数字和错误摇晃。生产 E2E 新增正确/错误点击期间非点击泡泡零形变断言和独立点击截图；上一轮 HUD 与本轮改动已提交并推送，Service Worker 更新为 `v34`，部署到 `http://64.83.41.39:18088`。23 项逻辑测试、本地 Chromium/Firefox/WebKit 与公开地址 Chromium 完整五战流程通过，部署目录和 `dist/` 完全一致。
+- 将怪物常态基准位置从画布 `Y=525` 小幅上移至 `Y=505`，同步所有入场、受击、蓄力、破势、恢复和提示特效锚点；泡泡盘面与 HUD 位置不变。Service Worker 缓存准备更新为 `v35`；23 项逻辑测试、构建、审计和 Chromium 完整五战流程通过，已目视检查 390×844 的普通怪与 Boss 截图，间距清晰且无遮挡。本轮未部署。
+- 将“反制成功 / 化解成功 / 破势”战斗提示从屏幕中下方移到左侧，并与右侧 HIT Combo 共用同一顶部安全区锚点；失误超限、战斗切换等非反制提示仍保留原居中位置。修复连续反馈时 CSS 动画未可靠重启的问题，生产 E2E 新增左右位置与垂直对齐断言。怪物上移与提示布局已随 Service Worker `v35` 部署到 `http://64.83.41.39:18088`；23 项逻辑测试、本地 Chromium/Firefox/WebKit 和公开地址 Chromium 完整流程通过，部署目录与 `dist/` 完全一致。
+- 重做战斗顶部 UI：玩家 HUD 左侧改为可点击暂停的圆形泡泡头像，右侧生命/护盾/能量三条纵排且总高与头像一致；删除独立暂停按钮、模式文字、倒计时和泡泡操作文案。怪物 HUD 下方左侧改为小型可消耗目标泡泡，正确点击后减少。取消盘面倒计时、超时伤害和超时换盘；盘面改为目标全部清除或有效点击达到 `targetCount + 3` 时刷新，原加时奖励改为恢复 14 点生命。Service Worker 更新为 `v36`；25 项逻辑测试、生产构建、依赖审计和 Chromium/Firefox/WebKit 完整五战流程通过，已目视检查 390×844 开局/消耗/反制/Boss 与 320×568 紧凑屏幕布局；待推送和部署。

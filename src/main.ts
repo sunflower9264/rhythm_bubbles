@@ -88,6 +88,8 @@ window.render_game_to_text = () => {
     grid: { rows: snapshot.rows, cols: snapshot.cols },
     remainingTargets: snapshot.remainingTargets,
     targetCount: snapshot.targetCount,
+    boardTapCount: snapshot.boardTapCount,
+    boardTapLimit: snapshot.boardTapLimit,
     visibleTargets: snapshot.visibleTargetIndices,
     expectedIndex: snapshot.expectedIndex,
     feedback: scene.getFeedbackState(),

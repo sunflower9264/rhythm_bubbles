@@ -408,17 +408,14 @@ input:focus-visible + i {
     max(0.85rem, env(safe-area-inset-left));
 }
 
-.hud-row {
-  display: grid;
-  grid-template-columns: 2.75rem 1fr auto;
-  align-items: center;
-  gap: 0.65rem;
-}
-
 .player-status {
+  display: grid;
+  grid-template-columns: 4.8rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.72rem;
   width: min(100%, 22rem);
   margin: 0 auto;
-  padding: 0.48rem 0.7rem 0.58rem;
+  padding: 0.52rem 0.65rem;
   border: 1px solid rgba(255, 255, 255, 0.88);
   border-radius: 1.2rem 1.45rem 1.15rem 1.35rem;
   background: rgba(255, 253, 244, 0.78);
@@ -426,60 +423,64 @@ input:focus-visible + i {
   backdrop-filter: blur(12px);
 }
 
-.icon-button--glass {
-  color: var(--blueberry);
-  background: rgba(255, 253, 244, 0.76);
-  backdrop-filter: blur(12px);
-}
-
-.mode-pill,
-.timer-pill {
-  display: flex;
-  align-items: center;
-  min-height: 2.4rem;
-  border: 1px solid rgba(255, 255, 255, 0.88);
-  background: rgba(255, 253, 244, 0.74);
-  box-shadow: 0 7px 18px rgba(56, 94, 102, 0.1);
-  backdrop-filter: blur(12px);
-}
-
-.mode-pill {
-  justify-self: start;
-  gap: 0.45rem;
-  padding: 0.35rem 0.86rem 0.35rem 0.52rem;
-  border-radius: 1rem 1.35rem 1.35rem 1rem;
-  font-size: clamp(0.67rem, 2.8vw, 0.82rem);
-  font-weight: 850;
-}
-
-.mode-dot {
-  width: 0.82rem;
-  height: 0.82rem;
-  border: 3px solid white;
-  border-radius: 50%;
-  background: var(--coral);
-  box-shadow: 0 2px 5px rgba(89, 101, 132, 0.16);
-}
-
-.timer-pill {
+.player-avatar {
   position: relative;
-  justify-content: center;
-  gap: 0.28rem;
-  min-width: 4rem;
-  padding: 0.34rem 0.7rem;
-  overflow: hidden;
-  border-radius: 1.3rem;
-  font-size: 0.8rem;
+  display: grid;
+  place-items: center;
+  width: 4.8rem;
+  height: 4.8rem;
+  padding: 0;
+  border: 0.24rem solid rgba(255, 255, 255, 0.94);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 31% 25%, rgba(255, 255, 255, 0.95) 0 8%, transparent 9%),
+    linear-gradient(145deg, #d9fff5 0%, #76ded0 48%, #47bbae 100%);
+  box-shadow: 0 7px 15px rgba(47, 159, 150, 0.22), inset -0.35rem -0.45rem 0.8rem rgba(35, 140, 140, 0.18);
+  cursor: pointer;
 }
 
-.timer-pill::before {
+.player-avatar > span {
+  position: relative;
+  width: 2.25rem;
+  height: 1.5rem;
+}
+
+.player-avatar > span::before {
   content: "";
   position: absolute;
-  right: 0;
-  bottom: 0;
+  top: 0.25rem;
+  left: 0.3rem;
+  width: 0.36rem;
+  height: 0.48rem;
+  border-radius: 50%;
+  background: #36506f;
+  box-shadow: 1.28rem 0 #36506f;
+}
+
+.player-avatar > span::after {
+  content: "";
+  position: absolute;
+  top: 0.8rem;
+  left: 0.72rem;
+  width: 0.78rem;
+  height: 0.4rem;
+  border-bottom: 0.17rem solid #36506f;
+  border-radius: 0 0 50% 50%;
+}
+
+.player-avatar > span > i {
+  position: absolute;
+  top: 0.62rem;
   left: 0;
-  height: 0.24rem;
-  background: rgba(82, 103, 168, 0.08);
+  width: 0.48rem;
+  height: 0.22rem;
+  border-radius: 50%;
+  background: rgba(255, 142, 138, 0.42);
+  box-shadow: 1.72rem 0 rgba(255, 142, 138, 0.42);
+}
+
+.player-avatar:active {
+  transform: scale(0.94);
 }
 
 /* Shared potion-meter treatment: the animated bubbles and bright meniscus live
@@ -529,36 +530,6 @@ input:focus-visible + i {
   box-shadow: 0 0 0.28rem var(--potion-meniscus), inset 1px 0 rgba(255, 255, 255, 0.38);
   transform-origin: right center;
   animation: potion-meniscus 1300ms ease-in-out infinite alternate;
-}
-
-.timer-pill > .liquid-fill {
-  position: absolute;
-  z-index: 1;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  width: var(--timer-progress);
-  height: 0.24rem;
-  border-radius: inherit;
-  background: linear-gradient(180deg, #d7fff4 0%, #8fe2cd 30%, var(--mint-deep) 100%);
-  pointer-events: none;
-  transition: width 180ms linear;
-}
-
-.timer-pill > span,
-.timer-pill > b {
-  position: relative;
-  z-index: 3;
-}
-
-.timer-pill.liquid-meter {
-  --potion-bubble: rgba(236, 255, 250, 0.78);
-  --potion-meniscus: rgba(216, 255, 245, 0.92);
-}
-
-.timer-pill.is-urgent {
-  color: var(--coral-deep);
-  animation: urgent-pulse 700ms ease-in-out infinite alternate;
 }
 
 .enemy-status {
@@ -778,26 +749,18 @@ input:focus-visible + i {
 
 .player-meters {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  margin-top: 0.42rem;
-  padding-top: 0.42rem;
-  border-top: 1px dashed rgba(82, 103, 168, 0.17);
+  grid-template-rows: repeat(3, minmax(0, 1fr));
+  gap: 0.22rem;
+  height: 4.8rem;
 }
 
 .player-meter {
+  display: grid;
+  grid-template-columns: 2.1rem minmax(0, 1fr) 3.15rem;
+  align-items: center;
+  gap: 0.36rem;
   min-width: 0;
-  padding: 0 0.5rem;
-}
-
-.player-meter + .player-meter {
-  border-left: 1px dashed rgba(82, 103, 168, 0.16);
-}
-
-.player-meter > span {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.22rem;
+  padding: 0.08rem 0;
 }
 
 .player-meter small {
@@ -813,6 +776,7 @@ input:focus-visible + i {
   font-weight: 950;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  text-align: right;
 }
 
 .player-meter strong em {
@@ -830,8 +794,7 @@ input:focus-visible + i {
   --potion-bubble: rgba(232, 255, 248, 0.78);
   --potion-meniscus: rgba(219, 255, 247, 0.94);
   width: 100%;
-  height: 0.28rem;
-  margin: 0.16rem 0 0;
+  height: 0.4rem;
 }
 
 .health-track--player u {
@@ -842,8 +805,7 @@ input:focus-visible + i {
   position: relative;
   display: block;
   width: 100%;
-  height: 0.28rem;
-  margin-top: 0.16rem;
+  height: 0.4rem;
   overflow: hidden;
   border-radius: 999px;
   background: rgba(82, 103, 168, 0.13);
@@ -1039,40 +1001,32 @@ input:focus-visible + i {
   100% { transform: translate3d(0, 0, 0) rotate(-7deg) scale(1); }
 }
 
-.objective-chip {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+.target-bubbles {
+  display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.3rem;
   width: min(100%, 22rem);
-  min-height: 2.05rem;
-  margin: 0.38rem auto 0;
-  padding: 0.36rem 0.42rem 0.36rem 0.72rem;
-  border: 1px solid rgba(255, 255, 255, 0.86);
-  border-radius: 1rem 1.3rem 1.3rem 1rem;
-  background: rgba(255, 253, 244, 0.7);
-  box-shadow: 0 6px 16px rgba(56, 94, 102, 0.08);
-  color: var(--ink);
-  font-size: clamp(0.6rem, 2.45vw, 0.74rem);
-  font-weight: 800;
-  line-height: 1.2;
-  text-shadow: 0 2px white;
-  backdrop-filter: blur(10px);
+  min-height: 1.55rem;
+  margin: 0.28rem auto 0;
+  padding-left: 0.42rem;
 }
 
-.objective-chip > span {
-  min-width: 0;
-  text-align: center;
+.target-bubbles > i {
+  width: 0.78rem;
+  height: 0.78rem;
+  flex: 0 0 auto;
+  border: 0.11rem solid rgba(255, 255, 255, 0.94);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 31% 25%, rgba(255, 255, 255, 0.95) 0 11%, transparent 12%),
+    linear-gradient(145deg, #fff3a8, #ffb76f 48%, #ff7f82);
+  box-shadow: 0 0.16rem 0.3rem rgba(233, 105, 115, 0.18);
+  animation: target-bubble-enter 180ms cubic-bezier(.2, .9, .25, 1.2) both;
 }
 
-.objective-chip > strong {
-  padding: 0.25rem 0.48rem;
-  border-radius: 999px;
-  background: rgba(82, 103, 168, 0.1);
-  color: var(--blueberry);
-  font-size: 0.58rem;
-  font-weight: 950;
-  white-space: nowrap;
+@keyframes target-bubble-enter {
+  from { opacity: 0; transform: scale(0.55); }
+  to { opacity: 1; transform: scale(1); }
 }
 
 .modal--reward,
@@ -1495,6 +1449,23 @@ input:focus-visible + i {
   animation: toast-pop 900ms cubic-bezier(.2, .9, .25, 1.2) both;
 }
 
+.level-toast.is-combat {
+  top: calc(max(0.75rem, env(safe-area-inset-top)) + 15.1rem);
+  right: auto;
+  bottom: auto;
+  left: max(0.65rem, env(safe-area-inset-left));
+  max-width: 9.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.74rem;
+  line-height: 1.15;
+  text-align: center;
+  transform: translate3d(-1rem, 0, 0) rotate(3deg);
+}
+
+.level-toast.is-combat.is-active {
+  animation-name: combat-toast-pop;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
@@ -1520,6 +1491,12 @@ input:focus-visible + i {
   0% { opacity: 0; transform: translate(50%, 24px) scale(0.72) rotate(-5deg); visibility: visible; }
   22%, 68% { opacity: 1; transform: translate(50%, 0) scale(1) rotate(-2deg); visibility: visible; }
   100% { opacity: 0; transform: translate(50%, -18px) scale(0.92) rotate(2deg); visibility: hidden; }
+}
+
+@keyframes combat-toast-pop {
+  0% { opacity: 0; transform: translate3d(-1rem, 0, 0) scale(0.72) rotate(5deg); visibility: visible; }
+  22%, 68% { opacity: 1; transform: translate3d(0, 0, 0) scale(1) rotate(2deg); visibility: visible; }
+  100% { opacity: 0; transform: translate3d(-0.35rem, -0.55rem, 0) scale(0.92) rotate(0); visibility: hidden; }
 }
 
 .reduce-motion *,

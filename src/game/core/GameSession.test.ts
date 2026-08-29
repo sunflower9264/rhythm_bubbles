@@ -13,6 +13,8 @@ test('单一入口从寻光开始，且保留 +10 与连击伤害', () => {
   assert.equal(start.snapshot.battle, 1);
   assert.equal(start.snapshot.phase, 'playing');
   assert.equal(start.snapshot.attackPower, 8);
+  assert.equal(start.snapshot.boardTapCount, 0);
+  assert.equal(start.snapshot.boardTapLimit, start.snapshot.targetCount + 3);
 
   const target = start.snapshot.bubbles.find((bubble) => bubble.isTarget);
   assert.ok(target);
@@ -21,6 +23,8 @@ test('单一入口从寻光开始，且保留 +10 与连击伤害', () => {
   assert.equal(update.snapshot.enemyHp, 142);
   assert.equal(update.snapshot.lastDamage, 8);
   assert.equal(update.snapshot.combo, 1);
+  assert.equal(update.snapshot.boardTapCount, 1);
+  assert.equal(session.select(target.index).snapshot.boardTapCount, 1);
 });
 
 test('五战生命与点错成本形成递增但宽容的曲线', () => {
@@ -125,6 +129,7 @@ test('连续两次完整化解会破势，破势期伤害提升 50%', () => {
   assert.equal(update.snapshot.enemyAttackState, 'staggered');
   assert.equal(update.snapshot.enemyPoise, 0);
 
+  if (update.snapshot.phase === 'transition') update = session.advanceTime(420);
   const target = update.snapshot.bubbles.find((bubble) => bubble.isTarget && !bubble.cleared);
   assert.ok(target);
   update = session.select(target.index);
@@ -174,10 +179,12 @@ test('灯笼骗骗鱼用救援标记切断捕获光', () => {
   let update = reachFirstIntent(session, initial);
   assert.equal(update.snapshot.enemyIntentTargets.length, 1);
   const hp = update.snapshot.playerHp;
+  const tapCount = update.snapshot.boardTapCount;
   update = session.select(update.snapshot.enemyIntentTargets[0]);
   assert.equal(update.effect, 'enemy-countered');
   assert.equal(update.snapshot.enemyAttackState, 'charging');
   assert.equal(update.snapshot.playerHp, hp);
+  assert.equal(update.snapshot.boardTapCount, tapCount + 1);
 });
 
 test('铠潮寄居蟹需击破两个任意顺序弱点，护壳期减伤且破壳后增伤', () => {
@@ -302,19 +309,45 @@ test('连击必须在 1 秒窗口内衔接，超时后归零', () => {
   assert.equal(update.snapshot.comboRemainingMs, 1000);
 });
 
-test('前三次失误可继续，第四次更换盘面', () => {
+test('未清除泡泡的点击达到目标数 +3 时保留本次失误并更换盘面', () => {
   const session = new GameSession(fixedRandom);
   const start = session.start();
   const wrong = start.snapshot.bubbles.find((bubble) => !bubble.isTarget)!;
+  const initialBoard = start.snapshot.board;
+  const tapLimit = start.snapshot.targetCount + 3;
   let update = start;
-  for (let count = 1; count <= 3; count += 1) {
+  for (let count = 1; count < tapLimit; count += 1) {
     update = session.select(wrong.index);
     assert.equal(update.snapshot.mistakeCount, count);
+    assert.equal(update.snapshot.boardTapCount, count);
     assert.equal(update.snapshot.phase, 'playing');
   }
+  const hpBeforeLimit = update.snapshot.playerHp;
   update = session.select(wrong.index);
-  assert.equal(update.effect, 'mistake-overflow');
+  assert.equal(update.effect, 'mistake');
+  assert.equal(update.snapshot.mistakeCount, tapLimit);
+  assert.equal(update.snapshot.boardTapCount, tapLimit);
+  assert.equal(update.snapshot.playerHp, hpBeforeLimit - update.snapshot.mistakeDamage);
   assert.equal(update.snapshot.phase, 'transition');
+
+  update = session.advanceTime(420);
+  assert.equal(update.snapshot.board, initialBoard + 1);
+  assert.equal(update.snapshot.boardTapCount, 0);
+  assert.equal(update.snapshot.boardTapLimit, update.snapshot.targetCount + 3);
+});
+
+test('取消盘面倒计时后，时间推进只会驱动怪物行动', () => {
+  const { session, update: start } = sessionStartingWith('angler');
+  const initialBoard = start.snapshot.board;
+  assert.equal(start.snapshot.remainingTimeMs, 0);
+  assert.equal(start.snapshot.timeLimitMs, 0);
+
+  const update = session.advanceTime(8000);
+  assert.equal(update.snapshot.phase, 'playing');
+  assert.equal(update.snapshot.board, initialBoard);
+  assert.equal(update.snapshot.playerHp, 90);
+  assert.equal(update.snapshot.remainingTimeMs, 0);
+  assert.equal(update.snapshot.timeLimitMs, 0);
 });
 
 test('预览、暂停和奖励阶段都冻结怪物行动', () => {
@@ -348,6 +381,24 @@ test('护盾奖励记录当前容量，重新开始后归零', () => {
   update = session.start();
   assert.equal(update.snapshot.shield, 0);
   assert.equal(update.snapshot.maxShield, 0);
+});
+
+test('原加时奖励改为只恢复 14 点生命', () => {
+  const session = new GameSession(fixedRandom);
+  let update = playUntilPhase(session, session.start(), 'reward');
+  update = session.selectReward(0);
+  update = finishPreview(session, update);
+  const wrong = update.snapshot.bubbles.find((bubble) => !bubble.isTarget)!;
+  update = session.select(wrong.index);
+  update = playUntilPhase(session, update, 'reward');
+
+  const rewardIndex = update.snapshot.rewardChoices.findIndex((reward) => reward.id === 'time');
+  assert.notEqual(rewardIndex, -1);
+  assert.equal(update.snapshot.rewardChoices[rewardIndex].description, '恢复 14 点生命');
+  const hpBeforeReward = update.snapshot.playerHp;
+  update = session.selectReward(rewardIndex);
+  assert.equal(update.snapshot.playerHp, Math.min(update.snapshot.maxPlayerHp, hpBeforeReward + 14));
+  assert.equal(update.snapshot.timeLimitMs, 0);
 });
 
 test('五战四奖励在多个随机种子和奖励策略下都可通关', () => {

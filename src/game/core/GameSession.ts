@@ -16,7 +16,7 @@ const REWARDS: RewardChoice[] = [
   { id: 'power', title: '泡泡利刃', description: '每次正确点击伤害 +2', icon: '✦' },
   { id: 'heart', title: '果冻心', description: '最大生命 +12，并恢复 18 点', icon: '♥' },
   { id: 'shield', title: '糖霜护盾', description: '获得 20 点护盾，优先抵挡伤害', icon: '◇' },
-  { id: 'time', title: '回响钟摆', description: '每轮 +4 秒，并恢复 14 点生命', icon: '◷' },
+  { id: 'time', title: '回响钟摆', description: '恢复 14 点生命', icon: '◷' },
 ];
 
 type TransitionTarget = 'next-board' | 'reward' | 'victory';
@@ -36,7 +36,7 @@ export class GameSession {
   private transitionTarget: TransitionTarget = 'next-board';
   private sequenceCursor = 0;
   private lastSelectedIndex: number | null = null;
-  private lastCountdownSecond = Number.POSITIVE_INFINITY;
+  private boardTapCount = 0;
   private battle = 1;
   private board = 0;
   private playerHp = BASE_PLAYER_HP;
@@ -47,7 +47,6 @@ export class GameSession {
   private combo = 0;
   private comboElapsedMs = 0;
   private enemyHp = 0;
-  private timeBonusMs = 0;
   private rewardChoices: RewardChoice[] = [];
   private lastDamage = 0;
   private lastEnemyDamage = 0;
@@ -76,7 +75,6 @@ export class GameSession {
     this.maxShield = 0;
     this.attackPower = BASE_ATTACK_POWER;
     this.resetCombo();
-    this.timeBonusMs = 0;
     this.lastTargetCount = 0;
     this.rewardChoices = [];
     this.mistakeCount = 0;
@@ -133,6 +131,7 @@ export class GameSession {
     if (!bubble || bubble.cleared) return this.update('none');
 
     this.lastSelectedIndex = index;
+    this.boardTapCount += 1;
     this.lastAttackReduction = 0;
     const enemy = this.currentEnemy();
     const mechanic = enemy.mechanic;
@@ -143,12 +142,12 @@ export class GameSession {
       this.enemyAttackState = 'recovery';
       this.enemyAttackElapsedMs = 0;
       if (this.playerHp === 0) this.phase = 'game-over';
-      return this.update('counter-miss', index);
+      return this.finishBubbleTap('counter-miss', index);
     }
     if (this.enemyAttackState === 'windup' && mechanic === 'capture' && index === intentIndex) {
       this.performCounterHit();
       this.resetEnemyAttack();
-      return this.update('enemy-countered', index);
+      return this.finishBubbleTap('enemy-countered', index);
     }
     if (this.enemyAttackState === 'windup' && mechanic === 'shell'
       && this.enemyIntentTargets.slice(this.enemyIntentCursor).includes(index)) {
@@ -159,7 +158,7 @@ export class GameSession {
       this.performCounterHit();
       this.enemyIntentCursor += 1;
       this.enemyPoise = Math.max(0, this.enemyIntentTargets.length - this.enemyIntentCursor);
-      if (this.enemyIntentCursor < this.enemyIntentTargets.length) return this.update('enemy-countered', index);
+      if (this.enemyIntentCursor < this.enemyIntentTargets.length) return this.finishBubbleTap('enemy-countered', index);
       this.enemyIntentTargets = [];
       this.enemyIntentCursor = 0;
       this.enemyPoise = 0;
@@ -168,12 +167,12 @@ export class GameSession {
         this.enemyAttackState = 'staggered';
         this.enemyAttackElapsedMs = 0;
       }
-      return this.update('enemy-break', index);
+      return this.finishBubbleTap('enemy-break', index);
     }
     if (this.enemyAttackState === 'windup' && mechanic === 'sequence' && index === intentIndex) {
       this.performCounterHit();
       this.enemyIntentCursor += 1;
-      if (this.enemyIntentCursor < this.enemyIntentTargets.length) return this.update('enemy-countered', index);
+      if (this.enemyIntentCursor < this.enemyIntentTargets.length) return this.finishBubbleTap('enemy-countered', index);
 
       this.enemyPoise = Math.max(0, this.enemyPoise - 1);
       this.enemyIntentTargets = [];
@@ -182,12 +181,12 @@ export class GameSession {
       else if (this.enemyPoise === 0) {
         this.enemyAttackState = 'staggered';
         this.enemyAttackElapsedMs = 0;
-        return this.update('enemy-break', index);
+        return this.finishBubbleTap('enemy-break', index);
       } else {
         this.enemyAttackState = 'charging';
         this.enemyAttackElapsedMs = 0;
       }
-      return this.update('enemy-countered', index);
+      return this.finishBubbleTap('enemy-countered', index);
     }
     if (this.enemyAttackState === 'windup' && mechanic === 'sequence'
       && this.enemyIntentTargets.includes(index) && index !== intentIndex) {
@@ -195,11 +194,7 @@ export class GameSession {
       this.mistakeCount += 1;
       this.applyPlayerDamage(Math.ceil(this.getMistakeDamage() * 0.5));
       if (this.playerHp === 0) this.phase = 'game-over';
-      else if (this.mistakeCount > MISTAKE_LIMIT) {
-        this.beginTransition('next-board');
-        return this.update('mistake-overflow', index);
-      }
-      return this.update('counter-miss', index);
+      return this.finishBubbleTap('counter-miss', index);
     }
     if (this.enemyAttackState === 'windup' && mechanic === 'sweep'
       && bubble.row === this.enemyHazardRow) {
@@ -210,7 +205,7 @@ export class GameSession {
       this.enemyAttackElapsedMs = 0;
       this.enemyHazardRow = null;
       if (this.playerHp === 0) this.phase = 'game-over';
-      return this.update('counter-miss', index);
+      return this.finishBubbleTap('counter-miss', index);
     }
 
     const correct = this.mode === 'sequence' ? index === this.getExpectedIndex() : bubble.isTarget;
@@ -223,11 +218,7 @@ export class GameSession {
         this.enemyAttackElapsedMs = Math.min(cooldown - 1, this.enemyAttackElapsedMs + cooldown * 0.2);
       }
       if (this.playerHp === 0) this.phase = 'game-over';
-      else if (this.mistakeCount > MISTAKE_LIMIT) {
-        this.beginTransition('next-board');
-        return this.update('mistake-overflow', index);
-      }
-      return this.update('mistake', index);
+      return this.finishBubbleTap('mistake', index);
     }
 
     bubble.cleared = true;
@@ -282,7 +273,7 @@ export class GameSession {
       return this.update('board-clear', index);
     }
 
-    return this.update(counterEffect ?? (this.lastAttackReduction > 0 ? 'enemy-staggered' : 'correct'), index);
+    return this.finishBubbleTap(counterEffect ?? (this.lastAttackReduction > 0 ? 'enemy-staggered' : 'correct'), index);
   }
 
   advanceTime(milliseconds: number): SessionUpdate {
@@ -297,26 +288,11 @@ export class GameSession {
         this.previewElapsedMs += step;
         if (this.previewElapsedMs >= this.getPreviewDurationMs()) {
           this.phase = 'playing';
-          this.remainingTimeMs = this.timeLimitMs;
-          this.lastCountdownSecond = Math.ceil(this.remainingTimeMs / 1000);
         }
       } else if (this.phase === 'playing') {
-        this.remainingTimeMs = Math.max(0, this.remainingTimeMs - step);
         if (this.combo > 0) {
           this.comboElapsedMs += step;
           if (this.comboElapsedMs >= COMBO_WINDOW_MS) this.resetCombo();
-        }
-        const second = Math.ceil(this.remainingTimeMs / 1000);
-        if (second <= 3 && second < this.lastCountdownSecond) effect = 'countdown';
-        this.lastCountdownSecond = second;
-        if (this.remainingTimeMs <= 0) {
-          this.resetCombo();
-          this.applyPlayerDamage(Math.ceil(this.currentEnemy().attack * 1.5));
-          this.resetEnemyAttack();
-          if (this.playerHp === 0) this.phase = 'game-over';
-          else this.beginTransition('next-board');
-          effect = 'timeout-impact';
-          break;
         }
 
         const attackEffect = this.advanceEnemyAttack(step);
@@ -370,6 +346,8 @@ export class GameSession {
         : 1,
       battle: this.battle,
       board: this.board,
+      boardTapCount: this.boardTapCount,
+      boardTapLimit: this.getBoardTapLimit(),
       totalBattles: ENEMY_ARCHETYPES.length,
       enemyId: enemy.id,
       enemyOrder: [...this.enemyOrder],
@@ -431,13 +409,13 @@ export class GameSession {
     const config = createLevelConfig(this.mode, this.battle, this.lastTargetCount, this.random);
     this.bubbles = createBubbles(config, this.random);
     this.lastTargetCount = config.targetCount;
-    this.timeLimitMs = config.timeLimitMs + this.timeBonusMs;
-    this.remainingTimeMs = this.timeLimitMs;
+    this.timeLimitMs = 0;
+    this.remainingTimeMs = 0;
     this.previewElapsedMs = 0;
     this.transitionElapsedMs = 0;
     this.sequenceCursor = 0;
     this.lastSelectedIndex = null;
-    this.lastCountdownSecond = Math.ceil(this.timeLimitMs / 1000);
+    this.boardTapCount = 0;
     this.mistakeCount = 0;
     this.lastAttackReduction = 0;
     this.phase = this.mode === 'classic' ? 'playing' : 'preview';
@@ -556,14 +534,13 @@ export class GameSession {
     if (!this.mode || this.bubbles.length === 0) return null;
     const rows = this.battle <= 4 ? 3 : 4;
     const cols = this.battle <= 2 ? 3 : 4;
-    const extraSeconds = this.mode === 'classic' ? 3 : 5;
     return {
       rows,
       cols,
       flashCount: 1,
       flashDurationMs: 900,
       sequenceIntervalMs: 300,
-      timeLimitMs: (this.lastTargetCount * 2 + extraSeconds) * 1000 + this.timeBonusMs,
+      timeLimitMs: 0,
     };
   }
 
@@ -592,6 +569,17 @@ export class GameSession {
 
   private getExpectedIntentIndex(): number | null {
     return this.enemyAttackState === 'windup' ? this.enemyIntentTargets[this.enemyIntentCursor] ?? null : null;
+  }
+
+  private getBoardTapLimit(): number {
+    return this.lastTargetCount + 3;
+  }
+
+  private finishBubbleTap(effect: SessionUpdate['effect'], index: number): SessionUpdate {
+    if (this.phase === 'playing' && this.getRemainingTargets() > 0 && this.boardTapCount >= this.getBoardTapLimit()) {
+      this.beginTransition('next-board');
+    }
+    return this.update(effect, index);
   }
 
   private startEnemySpecial(): SessionUpdate['effect'] | null {
@@ -646,7 +634,7 @@ export class GameSession {
     if (reward.id === 'power') return { ...reward, description: `攻击 ${this.attackPower} → ${this.attackPower + 2}，更容易压制蓄力` };
     if (reward.id === 'heart') return { ...reward, description: `生命上限 ${this.maxPlayerHp} → ${this.maxPlayerHp + 12}，并恢复 18` };
     if (reward.id === 'shield') return { ...reward, description: `护盾 ${this.shield} → ${this.shield + 20}，优先吸收撞击` };
-    return { ...reward, description: `每盘 +4 秒，并恢复 14 点生命` };
+    return { ...reward, description: `恢复 14 点生命` };
   }
 
   private applyReward(id: RewardId): void {
@@ -660,7 +648,6 @@ export class GameSession {
       this.maxShield = Math.max(this.maxShield, this.shield);
     }
     if (id === 'time') {
-      this.timeBonusMs += 4000;
       this.playerHp = Math.min(this.maxPlayerHp, this.playerHp + 14);
     }
   }

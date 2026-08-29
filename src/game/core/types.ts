@@ -80,6 +80,8 @@ export interface SessionSnapshot {
   previewProgress: number;
   battle: number;
   board: number;
+  boardTapCount: number;
+  boardTapLimit: number;
   totalBattles: number;
   enemyId: EnemyId;
   enemyOrder: EnemyId[];

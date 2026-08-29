@@ -57,19 +57,30 @@ assert.equal(state.battle.enemy.maxHp, 150);
 assert.equal(state.battle.player.attack, 8);
 assert.equal(state.battle.player.mistakeDamage, 5);
 assert.equal(state.battle.enemy.poise, 2);
-assert.equal(await page.locator('.liquid-meter').count(), 7, '计时、玩家三状态、敌人生命、蓄力和 Combo 应统一使用液体数值条');
+await page.waitForFunction(() => JSON.parse(window.render_game_to_text()).feedback.enemy.y === 505);
+state = await readState(page);
+assert.equal(state.feedback.enemy.y, 505, '怪物常态位置应小幅上移');
+assert.equal(state.timerMs, 0, '盘面倒计时应已取消');
+assert.equal(await page.locator('.liquid-meter').count(), 6, '玩家三状态、敌人生命、蓄力和 Combo 应统一使用液体数值条');
 assert.equal(await page.locator('#battle-value, #enemy-attack-damage, #score-value, #attack-value, #shield-value, #mistake-value').count(), 0,
   '旧战数、伤害、得分、攻击、护盾标签和失误标签应全部移除');
-assert.equal(await page.locator('#player-shield-value, #player-energy-value, #target-counter').count(), 3);
+assert.equal(await page.locator('#timer-fill, #time-value, #mode-name, .mode-pill, .objective-chip, #play-prompt, #target-counter').count(), 0,
+  '倒计时、模式名称和文字操作提示应全部移除');
+assert.equal(await page.locator('#player-shield-value, #player-energy-value').count(), 2);
 assert.equal(await page.locator('#player-energy-value').textContent(), '0%');
-assert.equal(await page.locator('#target-counter').textContent(), `剩余 ${state.remainingTargets}`);
+assert.equal(await page.locator('#target-bubbles > i').count(), state.remainingTargets);
 const playerHudBox = await page.locator('.player-status').boundingBox();
 const enemyHudBox = await page.locator('#enemy-status').boundingBox();
-const objectiveBox = await page.locator('.objective-chip').boundingBox();
+const targetBubblesBox = await page.locator('#target-bubbles').boundingBox();
 const enemyNameBox = await page.locator('#enemy-name').boundingBox();
-assert.ok(playerHudBox && enemyHudBox && objectiveBox && enemyNameBox);
+const avatarBox = await page.locator('#pause-button.player-avatar').boundingBox();
+const metersBox = await page.locator('.player-meters').boundingBox();
+assert.ok(playerHudBox && enemyHudBox && targetBubblesBox && enemyNameBox && avatarBox && metersBox);
 assert.ok(playerHudBox.y + playerHudBox.height <= enemyHudBox.y, '玩家 HUD 应位于怪物 HUD 上方');
-assert.ok(enemyHudBox.y + enemyHudBox.height <= objectiveBox.y, '目标提示应位于怪物 HUD 下方');
+assert.ok(enemyHudBox.y + enemyHudBox.height <= targetBubblesBox.y, '可消耗泡泡应位于怪物 HUD 下方');
+assert.ok(Math.abs(targetBubblesBox.x - enemyHudBox.x) <= 8, '可消耗泡泡应从怪物 HUD 左侧开始排列');
+assert.ok(Math.abs(avatarBox.width - avatarBox.height) <= 1, '玩家头像应为圆形');
+assert.ok(Math.abs(avatarBox.height - metersBox.height) <= 2, '三条玩家状态的总高应与头像一致');
 assert.ok(Math.abs((enemyNameBox.x + enemyNameBox.width / 2) - (enemyHudBox.x + enemyHudBox.width / 2)) <= 2,
   '怪物名称应在怪物 HUD 中几何居中');
 const enemyPotionStyle = await page.locator('#enemy-health-fill').evaluate((element) => ({
@@ -84,6 +95,29 @@ assert.match(enemyPotionStyle.meniscus, /potion-meniscus/);
 assert.equal(enemyPotionStyle.outerParticles, 'none', '空轨道外部不应继续绘制漂浮粒子');
 await screenshot(page, '02-seek-light-battle.png');
 
+const refreshPage = await context.newPage();
+await refreshPage.goto(`${BASE_URL}?seed=2654435761`, { waitUntil: 'networkidle' });
+await refreshPage.waitForFunction(() => typeof window.render_game_to_text === 'function');
+await refreshPage.locator('#start-game').tap();
+let refreshState = await readState(refreshPage);
+const refreshBoard = refreshState.battle.board;
+const wrongBubble = refreshState.bubbles.find((bubble) => !bubble.isTarget);
+assert.ok(wrongBubble);
+assert.equal(refreshState.boardTapLimit, refreshState.targetCount + 3);
+for (let tap = 1; tap <= refreshState.boardTapLimit; tap += 1) {
+  await refreshPage.evaluate((index) => window.selectBubble(index), wrongBubble.index);
+  refreshState = await readState(refreshPage);
+  assert.equal(refreshState.boardTapCount, tap);
+}
+assert.equal(refreshState.phase, 'transition', '点击达到目标泡泡数 +3 时应换盘');
+await refreshPage.evaluate(() => window.advanceTime(420));
+refreshState = await readState(refreshPage);
+assert.equal(refreshState.battle.board, refreshBoard + 1);
+assert.equal(refreshState.boardTapCount, 0);
+assert.equal(await refreshPage.locator('#target-bubbles > i').count(), refreshState.remainingTargets,
+  '换盘后可消耗泡泡应按新目标数重置');
+await refreshPage.close();
+
 const firstTarget = state.bubbles.find((bubble) => bubble.isTarget);
 assert.ok(firstTarget);
 await tapBubble(page, state, firstTarget.index);
@@ -94,7 +128,7 @@ assert.equal(state.battle.enemy.hp, 142);
 assert.ok(state.feedback.transformedBubbles.every((bubble) => bubble.index === firstTarget.index),
   '正确点击期间只有被点击泡泡可以产生形变');
 assert.equal(await page.locator('#player-energy-value').textContent(), `${Math.round((state.targetCount - state.remainingTargets) / state.targetCount * 100)}%`);
-assert.equal(await page.locator('#target-counter').textContent(), `剩余 ${state.remainingTargets}`);
+assert.equal(await page.locator('#target-bubbles > i').count(), state.remainingTargets, '正确点击后可消耗泡泡应减少一个');
 await screenshot(page, '02b-isolated-bubble-pop.png');
 
 state = await progressUntil(page, (snapshot) => snapshot.battle.enemy.attackState === 'windup');
@@ -102,6 +136,8 @@ assert.ok(state.battle.enemy.intentTargets.length >= 2);
 assert.equal(await page.locator('#enemy-attack-label').textContent(), `吞噬对招 0/${state.battle.enemy.intentTargets.length}`);
 assert.equal(state.feedback.intentLinks.rendered, state.battle.enemy.intentTargets.length);
 await screenshot(page, '03-jelly-intent-links.png');
+await page.waitForTimeout(450);
+state = await readState(page);
 
 const hpBeforeCounterMiss = state.battle.player.hp;
 const counterMissDamage = Math.ceil(state.battle.player.mistakeDamage * 0.5);
@@ -146,13 +182,25 @@ state = await resolveIntent(page, state);
 assert.equal(state.battle.enemy.attackState, 'staggered');
 assert.equal(state.battle.enemy.poise, 0);
 assert.equal(await page.locator('#enemy-attack-label').textContent(), '破势！伤害 ×1.5');
+await page.locator('#level-toast.is-combat.is-active').waitFor({ state: 'visible' });
+await page.locator('#level-toast').evaluate((element) => element.getAnimations().forEach((animation) => {
+  animation.currentTime = 450;
+  animation.pause();
+}));
+const counterToastBox = await page.locator('#level-toast').boundingBox();
+const counterComboBox = await page.locator('#combo-burst').boundingBox();
+assert.ok(counterToastBox && counterComboBox);
+assert.ok(counterToastBox.x < 40, '反制提示应贴近屏幕左侧');
+assert.ok(Math.abs(counterToastBox.y - counterComboBox.y) <= 20, '反制提示应与 HIT Combo 高度接近');
 await screenshot(page, '05-jelly-staggered.png');
+await page.locator('#level-toast').evaluate((element) => element.getAnimations().forEach((animation) => animation.play()));
 
 await page.locator('#pause-button').tap();
 state = await readState(page);
-const pausedTimer = state.timerMs;
+assert.equal(state.phase, 'paused', '点击泡泡头像应暂停游戏');
+const pausedAttackProgress = state.battle.enemy.attackProgress;
 await page.evaluate(() => window.advanceTime(3000));
-assert.equal((await readState(page)).timerMs, pausedTimer);
+assert.equal((await readState(page)).battle.enemy.attackProgress, pausedAttackProgress, '暂停时怪物蓄力应冻结');
 await page.locator('#resume-button').tap();
 
 const captured = new Set();
@@ -301,7 +349,7 @@ for (let guard = 0; guard < 1400; guard += 1) {
     const comboBox = await page.locator('#combo-burst').boundingBox();
     const enemyBox = await page.locator('#enemy-status').boundingBox();
     const playerBox = await page.locator('.player-status').boundingBox();
-    const targetBox = await page.locator('.objective-chip').boundingBox();
+    const targetBox = await page.locator('#target-bubbles').boundingBox();
     assert.ok(comboBox && enemyBox && playerBox && targetBox);
     assert.equal(boxesOverlap(comboBox, enemyBox), false, 'Combo 不应遮挡怪物状态 UI');
     assert.equal(boxesOverlap(comboBox, playerBox), false, 'Combo 不应遮挡玩家状态 UI');
