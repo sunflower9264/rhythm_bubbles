@@ -131,7 +131,7 @@ assert.equal(await page.locator('#battle-value, #enemy-attack-damage, #score-val
 assert.equal(await page.locator('#timer-fill, #time-value, #mode-name, .mode-pill, .objective-chip, #play-prompt, #target-counter').count(), 0,
   '倒计时、模式名称和文字操作提示应全部移除');
 assert.equal(await page.locator('#player-shield-value, #player-energy-value').count(), 2);
-assert.equal(await page.locator('#player-energy-value').textContent(), '0%');
+assert.equal(await page.locator('#player-energy-value').textContent(), '点怪物');
 assert.equal(await page.locator('#target-bubbles > i').count(), state.remainingTargets);
 const playerHudBox = await page.locator('.player-status').boundingBox();
 const enemyHudBox = await page.locator('#enemy-status').boundingBox();
@@ -308,8 +308,9 @@ assert.ok(combatTextScreenY > enemyHudBox.y + enemyHudBox.height && combatTextSc
   '战斗浮字应位于怪物 HUD 与怪物中心之间');
 assert.ok(state.feedback.transformedBubbles.every((bubble) => bubble.index === firstTarget.index),
   '正确点击期间只有被点击泡泡可以产生形变');
-assert.equal(await page.locator('#player-energy-value').textContent(),
-  `${Math.round(state.battle.player.ultimate.energy / state.battle.player.ultimate.maxEnergy * 100)}%`);
+assert.equal(await page.locator('#player-energy-value').textContent(), state.battle.player.ultimate.ready
+  ? '点怪物'
+  : `${Math.round(state.battle.player.ultimate.energy / state.battle.player.ultimate.maxEnergy * 100)}%`);
 assert.equal(await page.locator('#target-bubbles > i').count(), state.remainingTargets, '正确点击后可消耗泡泡应减少一个');
 await screenshot(page, '02b-isolated-bubble-pop.png');
 
@@ -384,7 +385,7 @@ assert.equal(state.battle.enemy.mechanicState, 'staggered');
 assert.equal(state.battle.enemy.poise, 0);
 assert.equal(state.feedback.combatText.anchorY, combatTextAnchorY, '破势反馈应复用统一的怪物上方锚点');
 assert.equal(await page.locator('#enemy-attack-label').textContent(), '撞击蓄力');
-await page.locator('#level-toast.is-combat.is-active').waitFor({ state: 'visible' });
+await page.locator('#level-toast.is-counter.is-active').waitFor({ state: 'visible' });
 const combatToastDuration = await page.locator('#level-toast').evaluate((element) => {
   const animation = element.getAnimations()[0];
   return animation?.effect?.getTiming().duration ?? 0;
@@ -395,29 +396,17 @@ await page.locator('#level-toast').evaluate((element) => element.getAnimations()
   animation.pause();
 }));
 const counterToastBox = await page.locator('#level-toast').boundingBox();
-const counterShellBox = await page.locator('#game-shell').boundingBox();
-const currentGameplayCanvasBox = await page.locator('#game-container canvas').boundingBox();
-assert.ok(counterToastBox && counterShellBox && currentGameplayCanvasBox);
-const currentEnemyTop = currentGameplayCanvasBox.y
-  + (state.feedback.enemy.y - state.feedback.enemy.displayHeight / 2) / 1280 * currentGameplayCanvasBox.height;
-const currentCombatTextScreenY = currentGameplayCanvasBox.y
-  + state.feedback.combatText.anchorY / 1280 * currentGameplayCanvasBox.height;
-const counterCenterDelta = counterToastBox.x + counterToastBox.width / 2
-  - (counterShellBox.x + counterShellBox.width / 2);
-assert.ok(Math.abs(counterCenterDelta) <= 5,
-  `反制提示应与怪物水平居中，当前偏差 ${counterCenterDelta.toFixed(2)}px`);
-const combatFeedbackDelta = (counterToastBox.y + counterToastBox.height / 2) - currentCombatTextScreenY;
-assert.ok(Math.abs(combatFeedbackDelta) <= 3,
-  `怪物招式提示应与伤害浮字使用同一高度，当前偏差 ${combatFeedbackDelta.toFixed(2)}px`);
-assert.ok(counterToastBox.y >= enemyHudBox.y + enemyHudBox.height,
-  '怪物招式提示不得遮挡怪物 HUD');
+const comboAtCounterBox = await page.locator('#combo-burst').boundingBox();
+assert.ok(counterToastBox && comboAtCounterBox);
+assert.ok(counterToastBox.x < 40 && counterToastBox.x + counterToastBox.width < 195,
+  '反制提示应放到屏幕左侧提示位');
+assert.ok(Math.abs(counterToastBox.y - comboAtCounterBox.y) <= 5,
+  '左侧反制提示应与右侧 HIT 使用同一顶部锚点');
 const combatToastAngle = await page.locator('#level-toast').evaluate((element) => {
   const matrix = new DOMMatrix(getComputedStyle(element).transform);
   return Math.atan2(matrix.b, matrix.a) * 180 / Math.PI;
 });
 assert.ok(Math.abs(combatToastAngle) < 0.1, '怪物招式提示文字必须保持水平');
-assert.ok(counterToastBox.y + counterToastBox.height <= currentEnemyTop + 18,
-  '反制提示应统一显示在怪物上方');
 await screenshot(page, '05-jelly-staggered.png');
 await page.locator('#level-toast').evaluate((element) => element.getAnimations().forEach((animation) => animation.play()));
 

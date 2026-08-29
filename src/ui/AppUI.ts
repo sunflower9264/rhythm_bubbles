@@ -220,7 +220,7 @@ export class AppUI {
       }
     });
 
-    if (update.effect === 'start') this.get('#level-toast').classList.remove('is-active', 'is-combat', 'is-battle');
+    if (update.effect === 'start') this.get('#level-toast').classList.remove('is-active', 'is-combat', 'is-counter', 'is-battle');
     if (update.effect === 'encounter-win' && !preferences.reducedMotion) this.triggerFinisherImpact();
     if (['enemy-impact', 'timeout-impact'].includes(update.effect) && !preferences.reducedMotion) this.triggerEnemyImpact();
     if (snapshot.lastEnemyDamage > 0 && ['mistake', 'counter-miss', 'mistake-overflow', 'enemy-impact', 'timeout-impact'].includes(update.effect)) this.triggerPlayerDamage();
@@ -235,9 +235,9 @@ export class AppUI {
     if (update.effect === 'enemy-countered') {
       this.flashToast(snapshot.enemyMechanic === 'capture' || snapshot.enemyMechanic === 'sweep'
         ? '反制成功！'
-        : `化解成功 · 架势 ${snapshot.enemyPoise}/${snapshot.maxEnemyPoise}`, 'combat');
+        : `化解成功 · 架势 ${snapshot.enemyPoise}/${snapshot.maxEnemyPoise}`, 'counter');
     }
-    if (update.effect === 'enemy-break') this.flashToast(`破势！伤害 ×${snapshot.enemyMechanic === 'shell' ? '1.75' : '1.5'}`, 'combat');
+    if (update.effect === 'enemy-break') this.flashToast(`破势！伤害 ×${snapshot.enemyMechanic === 'shell' ? '1.75' : '1.5'}`, 'counter');
     if (update.effect === 'mistake-overflow') {
       this.flashToast('失误超限 · 更换泡泡', 'combat');
       this.announce('失误超过三次，正在生成新一轮泡泡');
@@ -308,11 +308,12 @@ export class AppUI {
     this.settingsPausedGame = false;
   }
 
-  private flashToast(message: string, placement: 'default' | 'combat' | 'battle' = 'default'): void {
+  private flashToast(message: string, placement: 'default' | 'combat' | 'counter' | 'battle' = 'default'): void {
     const toast = this.get('#level-toast');
     toast.textContent = message;
     toast.classList.remove('is-active');
     toast.classList.toggle('is-combat', placement === 'combat');
+    toast.classList.toggle('is-counter', placement === 'counter');
     toast.classList.toggle('is-battle', placement === 'battle');
     void toast.offsetWidth;
     toast.classList.add('is-active');

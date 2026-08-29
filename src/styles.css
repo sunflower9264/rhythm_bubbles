@@ -1707,6 +1707,23 @@ input:focus-visible + i {
   animation-name: combat-toast-pop;
 }
 
+.level-toast.is-counter {
+  top: calc(max(0.75rem, env(safe-area-inset-top)) + 15.1rem);
+  right: auto;
+  bottom: auto;
+  left: max(0.65rem, env(safe-area-inset-left));
+  max-width: 9.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.74rem;
+  line-height: 1.15;
+  text-align: center;
+  transform: translate3d(-1rem, 0, 0);
+}
+
+.level-toast.is-counter.is-active {
+  animation-name: counter-toast-pop;
+}
+
 .level-toast.is-battle {
   top: calc(max(0.75rem, env(safe-area-inset-top)) + 15.1rem);
   right: auto;
@@ -1750,6 +1767,12 @@ input:focus-visible + i {
   0% { opacity: 0; transform: translate3d(-50%, calc(-50% + 0.55rem), 0) scale(0.78); visibility: visible; }
   14%, 82% { opacity: 1; transform: translate3d(-50%, -50%, 0) scale(1); visibility: visible; }
   100% { opacity: 0; transform: translate3d(-50%, calc(-50% - 0.45rem), 0) scale(0.94); visibility: hidden; }
+}
+
+@keyframes counter-toast-pop {
+  0% { opacity: 0; transform: translate3d(-1rem, 0, 0) scale(0.72); visibility: visible; }
+  14%, 82% { opacity: 1; transform: translate3d(0, 0, 0) scale(1); visibility: visible; }
+  100% { opacity: 0; transform: translate3d(-0.35rem, -0.55rem, 0) scale(0.92); visibility: hidden; }
 }
 
 @keyframes battle-toast-pop {

@@ -26,6 +26,8 @@ const COMBO_WINDOW_MS = 1000;
 const BASE_PLAYER_HP = 100;
 const BASE_ATTACK_POWER = 8;
 const ULTIMATE_ENERGY_MAX = 100;
+const ULTIMATE_BASE_ENERGY_GAIN = 5;
+const ULTIMATE_COMBO_ENERGY_BONUS_MAX = 2;
 const ULTIMATE_BASE_DURATION_MS = 5000;
 const ULTIMATE_CONTROL_DURATION_MS = 500;
 const ULTIMATE_BASE_DAMAGE_MULTIPLIER = 1.5;
@@ -73,7 +75,7 @@ export class GameSession {
   private enemyHp = 0;
   private rewardChoices: RewardChoice[] = [];
   private rewardMode: RewardMode = 'standard';
-  private ultimateEnergy = 0;
+  private ultimateEnergy = ULTIMATE_ENERGY_MAX;
   private ultimateActive = false;
   private ultimateElapsedMs = 0;
   private ultimateStage: 0 | 1 | 2 | 3 = 0;
@@ -110,7 +112,7 @@ export class GameSession {
     this.lastTargetCount = 0;
     this.rewardChoices = [];
     this.rewardMode = 'standard';
-    this.ultimateEnergy = 0;
+    this.ultimateEnergy = ULTIMATE_ENERGY_MAX;
     this.ultimateActive = false;
     this.ultimateElapsedMs = 0;
     this.ultimateStage = 0;
@@ -710,7 +712,8 @@ export class GameSession {
 
   private chargeUltimate(): void {
     if (this.ultimateActive) return;
-    const gain = 8 + Math.min(4, Math.max(0, this.combo - 1));
+    const gain = ULTIMATE_BASE_ENERGY_GAIN
+      + Math.min(ULTIMATE_COMBO_ENERGY_BONUS_MAX, Math.max(0, this.combo - 1));
     this.ultimateEnergy = Math.min(ULTIMATE_ENERGY_MAX, this.ultimateEnergy + gain);
   }
 

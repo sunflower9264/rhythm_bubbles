@@ -421,17 +421,26 @@ test('原加时奖励改为只恢复 14 点生命', () => {
   assert.equal(update.snapshot.playerHp, Math.min(update.snapshot.maxPlayerHp, hpBeforeReward + 14));
 });
 
-test('正确点击按连击充能，点错不充能且能量封顶 100', () => {
-  const { session } = sessionStartingWith('puffer');
-  let update = session.advanceTime(900);
-  assert.equal(update.snapshot.enemyMechanicState, 'staggered');
+test('开局海啸满能量，释放后至少需要十五次正确操作重新充满', () => {
+  const { session, update: initial } = sessionStartingWith('puffer');
+  let update = initial;
+  assert.equal(update.snapshot.ultimateEnergy, 100);
+  assert.equal(update.snapshot.ultimateReady, true);
+  update = session.activateUltimate();
+  assert.equal(update.snapshot.ultimateEnergy, 0);
+  update = session.advanceTime(5000);
+  assert.equal(update.snapshot.ultimateActive, false);
   const wrong = update.snapshot.bubbles.find((bubble) => !bubble.isTarget)!;
   update = session.select(wrong.index);
   assert.equal(update.snapshot.ultimateEnergy, 0);
 
+  let chargeEvents = 0;
   for (let guard = 0; guard < 80 && !update.snapshot.ultimateReady; guard += 1) {
+    const previousEnergy = update.snapshot.ultimateEnergy;
     update = playOneStep(session, update);
+    if (update.snapshot.ultimateEnergy > previousEnergy) chargeEvents += 1;
   }
+  assert.ok(chargeEvents >= 15);
   assert.equal(update.snapshot.ultimateEnergy, 100);
   assert.equal(update.snapshot.ultimateEnergyMax, 100);
   assert.equal(update.snapshot.ultimateReady, true);
