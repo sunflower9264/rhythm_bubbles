@@ -44,6 +44,7 @@ assert.ok(startBox && startBox.y > 420 && startBox.y < 680, '开始游戏应位�
 assert.ok(settingsBox && settingsBox.y > startBox.y + startBox.height, '游戏设置应位于开始游戏下方');
 
 await page.locator('#start-game').tap();
+await page.evaluate(() => window.advanceTime(0));
 let state = await readState(page);
 assert.equal(state.phase, 'playing');
 assert.equal(state.mode, 'classic');
@@ -56,7 +57,21 @@ assert.equal(state.battle.enemy.maxHp, 150);
 assert.equal(state.battle.player.attack, 8);
 assert.equal(state.battle.player.mistakeDamage, 5);
 assert.equal(state.battle.enemy.poise, 2);
-assert.equal(await page.locator('.liquid-meter').count(), 5, '计时、敌我生命、蓄力和 Combo 应统一使用液体数值条');
+assert.equal(await page.locator('.liquid-meter').count(), 7, '计时、玩家三状态、敌人生命、蓄力和 Combo 应统一使用液体数值条');
+assert.equal(await page.locator('#battle-value, #enemy-attack-damage, #score-value, #attack-value, #shield-value, #mistake-value').count(), 0,
+  '旧战数、伤害、得分、攻击、护盾标签和失误标签应全部移除');
+assert.equal(await page.locator('#player-shield-value, #player-energy-value, #target-counter').count(), 3);
+assert.equal(await page.locator('#player-energy-value').textContent(), '0%');
+assert.equal(await page.locator('#target-counter').textContent(), `剩余 ${state.remainingTargets}`);
+const playerHudBox = await page.locator('.player-status').boundingBox();
+const enemyHudBox = await page.locator('#enemy-status').boundingBox();
+const objectiveBox = await page.locator('.objective-chip').boundingBox();
+const enemyNameBox = await page.locator('#enemy-name').boundingBox();
+assert.ok(playerHudBox && enemyHudBox && objectiveBox && enemyNameBox);
+assert.ok(playerHudBox.y + playerHudBox.height <= enemyHudBox.y, '玩家 HUD 应位于怪物 HUD 上方');
+assert.ok(enemyHudBox.y + enemyHudBox.height <= objectiveBox.y, '目标提示应位于怪物 HUD 下方');
+assert.ok(Math.abs((enemyNameBox.x + enemyNameBox.width / 2) - (enemyHudBox.x + enemyHudBox.width / 2)) <= 2,
+  '怪物名称应在怪物 HUD 中几何居中');
 const enemyPotionStyle = await page.locator('#enemy-health-fill').evaluate((element) => ({
   overflow: getComputedStyle(element).overflow,
   bubbles: getComputedStyle(element, '::before').animationName,
@@ -72,9 +87,15 @@ await screenshot(page, '02-seek-light-battle.png');
 const firstTarget = state.bubbles.find((bubble) => bubble.isTarget);
 assert.ok(firstTarget);
 await tapBubble(page, state, firstTarget.index);
+await page.waitForTimeout(100);
 state = await readState(page);
 assert.equal(state.score, 10);
 assert.equal(state.battle.enemy.hp, 142);
+assert.ok(state.feedback.transformedBubbles.every((bubble) => bubble.index === firstTarget.index),
+  '正确点击期间只有被点击泡泡可以产生形变');
+assert.equal(await page.locator('#player-energy-value').textContent(), `${Math.round((state.targetCount - state.remainingTargets) / state.targetCount * 100)}%`);
+assert.equal(await page.locator('#target-counter').textContent(), `剩余 ${state.remainingTargets}`);
+await screenshot(page, '02b-isolated-bubble-pop.png');
 
 state = await progressUntil(page, (snapshot) => snapshot.battle.enemy.attackState === 'windup');
 assert.ok(state.battle.enemy.intentTargets.length >= 2);
@@ -86,10 +107,14 @@ const hpBeforeCounterMiss = state.battle.player.hp;
 const counterMissDamage = Math.ceil(state.battle.player.mistakeDamage * 0.5);
 const enemyImpactDamage = state.battle.enemy.attack;
 await page.evaluate((index) => window.selectBubble(index), state.battle.enemy.intentTargets[1]);
+const counterMissIndex = state.battle.enemy.intentTargets[1];
+await page.waitForTimeout(120);
 state = await readState(page);
 assert.equal(state.battle.player.hp, hpBeforeCounterMiss - counterMissDamage);
 assert.equal(state.battle.enemy.intentCursor, 0);
 assert.equal(state.battle.player.mistakes, 1);
+assert.ok(state.feedback.transformedBubbles.every((bubble) => bubble.index === counterMissIndex),
+  '错误点击期间只有被点击泡泡可以产生形变');
 
 await page.evaluate((milliseconds) => window.advanceTime(milliseconds), state.battle.enemy.windupMs);
 state = await readState(page);
@@ -180,6 +205,9 @@ for (let guard = 0; guard < 1400; guard += 1) {
     assert.equal(state.feedback.shield.ratio, 1);
     assert.equal(state.feedback.shield.damageStage, 'intact');
     assert.equal(state.feedback.shield.cracksVisible, false);
+    assert.equal(state.battle.player.maxShield, 20);
+    assert.equal(await page.locator('#player-shield-value').textContent(), '20/20');
+    assert.equal(await page.locator('#player-shield-fill').evaluate((element) => element.style.width), '100%');
     await screenshot(page, '07-shield-intact.png');
     state = await advanceToWindup(page, state);
     assert.equal(state.battle.enemy.attackState, 'windup');
@@ -190,6 +218,8 @@ for (let guard = 0; guard < 1400; guard += 1) {
     assert.equal(state.feedback.shield.ratio, 0.3);
     assert.equal(state.feedback.shield.damageStage, 'damaged');
     assert.equal(state.feedback.shield.cracksVisible, true, '裂纹应只在护盾实际格挡时短暂显示');
+    assert.equal(await page.locator('#player-shield-value').textContent(), '6/20');
+    assert.equal(await page.locator('#player-shield-fill').evaluate((element) => element.style.width), '30%');
     await screenshot(page, '07-shield-impact.png');
     await page.evaluate(() => window.advanceTime(320));
     await page.waitForTimeout(1300);
@@ -206,6 +236,8 @@ for (let guard = 0; guard < 1400; guard += 1) {
     assert.equal(state.feedback.shield.breakCount, breakCount + 1);
     assert.equal(state.feedback.shield.damageStage, 'none');
     assert.equal(state.feedback.shield.cracksVisible, true);
+    assert.equal(await page.locator('#player-shield-value').textContent(), '0/20');
+    assert.equal(await page.locator('#player-shield-fill').evaluate((element) => element.style.width), '0%');
     await screenshot(page, '07-shield-break.png');
     sawShieldBreak = true;
     continue;
@@ -268,10 +300,12 @@ for (let guard = 0; guard < 1400; guard += 1) {
     assert.equal(await page.locator('#combo-impact').textContent(), expectedImpact);
     const comboBox = await page.locator('#combo-burst').boundingBox();
     const enemyBox = await page.locator('#enemy-status').boundingBox();
-    const playerBox = await page.locator('.score-strip').boundingBox();
-    assert.ok(comboBox && enemyBox && playerBox);
+    const playerBox = await page.locator('.player-status').boundingBox();
+    const targetBox = await page.locator('.objective-chip').boundingBox();
+    assert.ok(comboBox && enemyBox && playerBox && targetBox);
     assert.equal(boxesOverlap(comboBox, enemyBox), false, 'Combo 不应遮挡怪物状态 UI');
     assert.equal(boxesOverlap(comboBox, playerBox), false, 'Combo 不应遮挡玩家状态 UI');
+    assert.equal(boxesOverlap(comboBox, targetBox), false, 'Combo 不应遮挡目标提示');
     assert.ok(comboBox.y < 310, 'Combo 应尽量靠近顶部状态区');
     await screenshot(page, '07-combo-impact.png');
     sawComboImpact = true;

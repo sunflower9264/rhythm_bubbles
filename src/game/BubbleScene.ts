@@ -582,7 +582,6 @@ export class BubbleScene extends Phaser.Scene {
     this.transientEffects.add(glow);
 
     this.dropletEmitter.explode(large ? 24 : 14, x, y);
-    this.waveNeighbours(x, y, large ? 1.085 : 1.06);
 
     this.tweens.add({
       targets: image,
@@ -641,7 +640,6 @@ export class BubbleScene extends Phaser.Scene {
     this.feedbackPhase = 'wobbling-wrong';
     this.wrongWobbleCount += 1;
     this.createWrongRipple(x, y, image.width * baseScale);
-    this.waveNeighbours(x, y, 1.04);
     this.tweens.add({
       targets: image,
       scaleX: baseScale * 0.86,
@@ -887,25 +885,6 @@ export class BubbleScene extends Phaser.Scene {
       .setDepth(28);
     this.transientEffects.add(ring);
     this.destroyAfterTween(ring, { scaleX: 1.75, scaleY: 1.35, alpha: 0, duration: 280, ease: 'Cubic.Out' });
-  }
-
-  private waveNeighbours(x: number, y: number, peakScale: number): void {
-    for (const view of this.bubbleViews) {
-      if (view.cleared || !view.image.visible || (view.image.x === x && view.image.y === y)) continue;
-      const distance = Phaser.Math.Distance.Between(x, y, view.image.x, view.image.y);
-      const delay = Math.min(90, distance * 0.16);
-      this.tweens.killTweensOf(view.image);
-      view.image.setScale(view.baseScale).setAngle(0);
-      this.tweens.add({
-        targets: view.image,
-        scaleX: view.baseScale * peakScale,
-        scaleY: view.baseScale * (2 - peakScale),
-        duration: 80,
-        delay,
-        yoyo: true,
-        ease: 'Sine.InOut',
-      });
-    }
   }
 
   private destroyAfterTween(

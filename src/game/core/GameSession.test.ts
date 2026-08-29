@@ -335,6 +335,21 @@ test('预览、暂停和奖励阶段都冻结怪物行动', () => {
   assert.equal(update.snapshot.enemyAttackProgress, progress);
 });
 
+test('护盾奖励记录当前容量，重新开始后归零', () => {
+  const session = new GameSession(fixedRandom);
+  let update = session.start();
+  assert.equal(update.snapshot.maxShield, 0);
+  update = playUntilPhase(session, update, 'reward');
+  const shieldIndex = update.snapshot.rewardChoices.findIndex((reward) => reward.id === 'shield');
+  assert.notEqual(shieldIndex, -1);
+  update = session.selectReward(shieldIndex);
+  assert.equal(update.snapshot.shield, 20);
+  assert.equal(update.snapshot.maxShield, 20);
+  update = session.start();
+  assert.equal(update.snapshot.shield, 0);
+  assert.equal(update.snapshot.maxShield, 0);
+});
+
 test('五战四奖励在多个随机种子和奖励策略下都可通关', () => {
   for (const reward of ['power', 'heart', 'shield', 'time'] as RewardId[]) {
     for (let seed = 1; seed <= 24; seed += 1) {

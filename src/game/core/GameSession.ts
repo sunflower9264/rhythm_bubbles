@@ -42,6 +42,7 @@ export class GameSession {
   private playerHp = BASE_PLAYER_HP;
   private maxPlayerHp = BASE_PLAYER_HP;
   private shield = 0;
+  private maxShield = 0;
   private attackPower = BASE_ATTACK_POWER;
   private combo = 0;
   private comboElapsedMs = 0;
@@ -72,6 +73,7 @@ export class GameSession {
     this.playerHp = BASE_PLAYER_HP;
     this.maxPlayerHp = BASE_PLAYER_HP;
     this.shield = 0;
+    this.maxShield = 0;
     this.attackPower = BASE_ATTACK_POWER;
     this.resetCombo();
     this.timeBonusMs = 0;
@@ -395,6 +397,7 @@ export class GameSession {
       playerHp: this.playerHp,
       maxPlayerHp: this.maxPlayerHp,
       shield: this.shield,
+      maxShield: this.maxShield,
       attackPower: this.attackPower,
       combo: this.combo,
       comboRemainingMs: this.combo > 0 ? Math.max(0, COMBO_WINDOW_MS - this.comboElapsedMs) : 0,
@@ -652,7 +655,10 @@ export class GameSession {
       this.maxPlayerHp += 12;
       this.playerHp = Math.min(this.maxPlayerHp, this.playerHp + 18);
     }
-    if (id === 'shield') this.shield += 20;
+    if (id === 'shield') {
+      this.shield += 20;
+      this.maxShield = Math.max(this.maxShield, this.shield);
+    }
     if (id === 'time') {
       this.timeBonusMs += 4000;
       this.playerHp = Math.min(this.maxPlayerHp, this.playerHp + 14);

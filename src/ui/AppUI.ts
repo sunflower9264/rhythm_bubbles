@@ -94,17 +94,13 @@ export class AppUI {
     }
     document.body.classList.toggle('reduce-motion', preferences.reducedMotion);
 
-    this.text('#score-value', String(snapshot.score).padStart(3, '0'));
     this.text('#time-value', String(Math.max(0, Math.ceil(snapshot.remainingTimeMs / 1000))));
-    this.text('#attack-value', String(snapshot.attackPower));
-    this.text('#battle-value', `${snapshot.battle}/${snapshot.totalBattles}`);
     this.text('#enemy-name', snapshot.enemyName);
     this.text('#enemy-health-value', `${snapshot.enemyHp}/${snapshot.maxEnemyHp}`);
     this.text('#player-health-value', String(snapshot.playerHp));
     this.text('#player-max-health', String(snapshot.maxPlayerHp));
-    this.text('#shield-value', snapshot.shield > 0 ? `护盾 ${snapshot.shield}` : '无护盾');
-    this.text('#mistake-value', `失误 ${Math.min(snapshot.mistakeCount, snapshot.mistakeLimit)}/${snapshot.mistakeLimit}`);
-    this.text('#mode-name', snapshot.mode ? `${BATTLE_LABEL[snapshot.battle - 1] ?? MODE_LABEL[snapshot.mode]} · 第${snapshot.battle}战` : '');
+    this.text('#player-shield-value', snapshot.maxShield > 0 ? `${snapshot.shield}/${snapshot.maxShield}` : '0');
+    this.text('#mode-name', snapshot.mode ? BATTLE_LABEL[snapshot.battle - 1] ?? MODE_LABEL[snapshot.mode] : '');
     this.text('#gameover-score', String(snapshot.score));
     this.text('#gameover-level', String(snapshot.level));
     this.text('#gameover-best', String(this.controller.getBestScore()));
@@ -121,11 +117,17 @@ export class AppUI {
       this.get('#player-health-fill').style.width = `${Math.max(0, playerRatio) * 100}%`;
       this.lastPlayerHealthRatio = playerRatio;
     }
+    const shieldRatio = snapshot.maxShield > 0 ? snapshot.shield / snapshot.maxShield : 0;
+    this.get('#player-shield-fill').style.width = `${Math.max(0, Math.min(1, shieldRatio)) * 100}%`;
+    const energyRatio = snapshot.targetCount > 0
+      ? (snapshot.targetCount - snapshot.remainingTargets) / snapshot.targetCount
+      : 0;
+    this.get('#player-energy-fill').style.width = `${Math.max(0, Math.min(1, energyRatio)) * 100}%`;
+    this.text('#player-energy-value', `${Math.round(Math.max(0, Math.min(1, energyRatio)) * 100)}%`);
+    this.text('#target-counter', `剩余 ${snapshot.remainingTargets}`);
     this.get('#enemy-status').classList.toggle('is-boss', snapshot.enemyIsBoss);
     this.get('#enemy-status').classList.toggle('is-windup', snapshot.enemyAttackState === 'windup');
     this.get('#enemy-status').classList.toggle('is-phase-two', snapshot.enemyPhase === 2);
-    this.get('#shield-value').classList.toggle('is-active', snapshot.shield > 0);
-    this.get('#mistake-value').classList.toggle('is-warning', snapshot.mistakeCount >= snapshot.mistakeLimit);
 
     const comboBurst = this.get('#combo-burst');
     const comboVisible = snapshot.combo > 1 && !['menu', 'reward', 'game-over', 'victory'].includes(snapshot.phase);
@@ -165,9 +167,6 @@ export class AppUI {
           ? '攻击落空'
           : attackFrozen ? '攻击暂停' : mechanicLabel;
     this.text('#enemy-attack-label', attackLabel);
-    this.text('#enemy-attack-damage', ['sequence', 'shell'].includes(snapshot.enemyMechanic)
-      ? `架势 ${snapshot.enemyPoise}/${snapshot.maxEnemyPoise}`
-      : `伤害 ${snapshot.enemyAttack}`);
     attackIntent.style.setProperty('--attack-progress', `${snapshot.enemyAttackProgress * 100}%`);
     attackIntent.classList.toggle('is-windup', snapshot.enemyAttackState === 'windup');
     attackIntent.classList.toggle('is-staggered', snapshot.enemyAttackState === 'staggered');
@@ -178,7 +177,7 @@ export class AppUI {
       ? snapshot.mode === 'memory' ? '看仔细，记住这次发光的位置' : '看仔细，记住所有编号顺序'
       : snapshot.phase === 'transition' ? snapshot.enemyHp === 0 ? '漂亮一击！' : snapshot.mistakeCount > snapshot.mistakeLimit ? '失误超限，正在更换泡泡' : '下一组泡泡正在出现'
         : snapshot.phase === 'playing' && snapshot.enemyHp === 0
-          ? `${snapshot.enemyIsBoss ? 'Boss 已破防！清完泡泡完成终结' : '敌人已破防！清完泡泡拿下奖励'} · 剩余 ${snapshot.remainingTargets}`
+          ? snapshot.enemyIsBoss ? 'Boss 已破防！清完泡泡完成终结' : '敌人已破防！清完泡泡拿下奖励'
         : snapshot.phase === 'playing' && snapshot.enemyAttackState === 'windup'
           ? {
             sequence: `目标锁定！按 ${snapshot.enemyIntentTargets.map((_, index) => index + 1).join('→')} 化解吞噬`,
@@ -187,9 +186,9 @@ export class AppUI {
             sweep: `避开第 ${(snapshot.enemyHazardRow ?? 0) + 1} 排，从安全行反击`,
             guard: '停手！等尖刺收回再攻击',
           }[snapshot.enemyMechanic]
-        : snapshot.mode === 'classic' ? `戳破发光泡泡 · 剩余 ${snapshot.remainingTargets}`
-          : snapshot.mode === 'memory' ? `凭记忆找到它们 · 剩余 ${snapshot.remainingTargets}`
-            : `按刚才的顺序点击 · 剩余 ${snapshot.remainingTargets}`;
+        : snapshot.mode === 'classic' ? '戳破发光泡泡'
+          : snapshot.mode === 'memory' ? '凭记忆找到它们'
+            : '按刚才的顺序点击';
     this.text('#play-prompt', prompt);
 
     for (const key of ['sound', 'music', 'haptics', 'reducedMotion'] as const) {
@@ -354,23 +353,24 @@ export class AppUI {
 
       <section id="hud" class="hud" aria-label="游戏状态">
         <div class="hud-safe">
-          <div class="hud-row">
-            <button id="pause-button" class="icon-button icon-button--glass" type="button" aria-label="暂停游戏">Ⅱ</button>
-            <div class="mode-pill"><span class="mode-dot"></span><span id="mode-name"></span></div>
-            <div id="timer-fill" class="timer-pill liquid-meter liquid-meter--timer" style="--timer-progress: 100%"><i class="liquid-fill" aria-hidden="true"></i><span aria-hidden="true">◷</span><b id="time-value">0</b></div>
+          <div class="player-status">
+            <div class="hud-row">
+              <button id="pause-button" class="icon-button icon-button--glass" type="button" aria-label="暂停游戏">Ⅱ</button>
+              <div class="mode-pill"><span class="mode-dot"></span><span id="mode-name"></span></div>
+              <div id="timer-fill" class="timer-pill liquid-meter liquid-meter--timer" style="--timer-progress: 100%"><i class="liquid-fill" aria-hidden="true"></i><span aria-hidden="true">◷</span><b id="time-value">0</b></div>
+            </div>
+            <div class="player-meters">
+              <div class="player-meter player-vital"><span><small>生命</small><strong><span id="player-health-value">100</span><em>/<span id="player-max-health">100</span></em></strong></span><i class="health-track health-track--player liquid-meter"><u id="player-health-fill" class="liquid-fill"></u></i></div>
+              <div class="player-meter player-meter--shield"><span><small>护盾</small><strong id="player-shield-value">0</strong></span><i class="player-meter-track liquid-meter"><u id="player-shield-fill" class="liquid-fill"></u></i></div>
+              <div class="player-meter player-meter--energy"><span><small>能量</small><strong id="player-energy-value">0%</strong></span><i class="player-meter-track liquid-meter"><u id="player-energy-fill" class="liquid-fill"></u></i></div>
+            </div>
           </div>
           <div id="enemy-status" class="enemy-status">
-            <div class="enemy-heading"><span>第 <b id="battle-value">1/5</b> 战</span><strong id="enemy-name">紫莓果冻</strong><em>Boss</em></div>
+            <div class="enemy-heading"><strong id="enemy-name">紫莓果冻</strong><em>Boss</em></div>
             <div class="health-track health-track--enemy liquid-meter"><i id="enemy-health-fill" class="liquid-fill"></i><b id="enemy-health-value">40/40</b></div>
-            <div id="enemy-attack-intent" class="attack-intent" style="--attack-progress: 0%"><span aria-hidden="true"></span><strong id="enemy-attack-label">撞击蓄力</strong><i class="liquid-meter"><b class="liquid-fill"></b></i><em id="enemy-attack-damage">伤害 8</em></div>
+            <div id="enemy-attack-intent" class="attack-intent" style="--attack-progress: 0%"><span aria-hidden="true"></span><strong id="enemy-attack-label">撞击蓄力</strong><i class="liquid-meter"><b class="liquid-fill"></b></i></div>
           </div>
-          <div class="score-strip">
-            <div class="player-vital"><small>生命</small><strong><span id="player-health-value">100</span><em>/<span id="player-max-health">100</span></em></strong><i class="health-track health-track--player liquid-meter"><u id="player-health-fill" class="liquid-fill"></u></i></div>
-            <div class="score-main"><small>得分</small><strong id="score-value">000</strong></div>
-            <div><small>攻击</small><strong id="attack-value">8</strong></div>
-          </div>
-          <div class="combat-tags"><span id="shield-value">无护盾</span><span id="mistake-value">失误 0/3</span></div>
-          <p id="play-prompt" class="play-prompt"></p>
+          <p class="objective-chip"><span id="play-prompt"></span><strong id="target-counter">剩余 0</strong></p>
         </div>
       </section>
 

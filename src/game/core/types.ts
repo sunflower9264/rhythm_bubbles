@@ -107,6 +107,7 @@ export interface SessionSnapshot {
   playerHp: number;
   maxPlayerHp: number;
   shield: number;
+  maxShield: number;
   attackPower: number;
   combo: number;
   comboRemainingMs: number;
