@@ -17,6 +17,9 @@ export class AppUI {
   private playerDamageTimer?: number;
   private comboPunchTimer?: number;
   private comboImpactTimer?: number;
+  private readonly loadingStartedAt = performance.now();
+  private loadingProgress = 0;
+  private resourcesReady = false;
 
   constructor(private readonly controller: GameController, root: HTMLElement) {
     this.root = root;
@@ -68,8 +71,9 @@ export class AppUI {
     const gameOver = this.get('#gameover-modal');
     const reward = this.get('#reward-modal');
     const victory = this.get('#victory-modal');
+    this.root.closest('#game-shell')?.classList.toggle('is-menu', snapshot.phase === 'menu');
 
-    menu.classList.toggle('is-visible', snapshot.phase === 'menu');
+    menu.classList.toggle('is-visible', this.resourcesReady && snapshot.phase === 'menu');
     hud.classList.toggle('is-visible', snapshot.phase !== 'menu');
     pause.classList.toggle('is-visible', snapshot.phase === 'paused');
     reward.classList.toggle('is-visible', snapshot.phase === 'reward');
@@ -182,7 +186,7 @@ export class AppUI {
       this.text(`#reward-description-${index}`, choice.description);
     });
 
-    if (update.effect === 'start') this.get('#level-toast').classList.remove('is-active', 'is-combat');
+    if (update.effect === 'start') this.get('#level-toast').classList.remove('is-active', 'is-combat', 'is-battle');
     if (update.effect === 'encounter-win' && !preferences.reducedMotion) this.triggerFinisherImpact();
     if (['enemy-impact', 'timeout-impact'].includes(update.effect) && !preferences.reducedMotion) this.triggerEnemyImpact();
     if (snapshot.lastEnemyDamage > 0 && ['mistake', 'counter-miss', 'mistake-overflow', 'enemy-impact', 'timeout-impact'].includes(update.effect)) this.triggerPlayerDamage();
@@ -197,14 +201,14 @@ export class AppUI {
     if (update.effect === 'enemy-countered' && snapshot.enemyAttackState === 'charging') {
       this.flashToast(snapshot.enemyMechanic === 'capture' || snapshot.enemyMechanic === 'sweep'
         ? '反制成功！'
-        : `化解成功 · 架势 ${snapshot.enemyPoise}/${snapshot.maxEnemyPoise}`, true);
+        : `化解成功 · 架势 ${snapshot.enemyPoise}/${snapshot.maxEnemyPoise}`, 'combat');
     }
-    if (update.effect === 'enemy-break') this.flashToast(`破势！伤害 ×${snapshot.enemyMechanic === 'shell' ? '1.75' : '1.5'}`, true);
+    if (update.effect === 'enemy-break') this.flashToast(`破势！伤害 ×${snapshot.enemyMechanic === 'shell' ? '1.75' : '1.5'}`, 'combat');
     if (update.effect === 'mistake-overflow') {
-      this.flashToast('失误超限 · 更换泡泡');
+      this.flashToast('失误超限 · 更换泡泡', 'combat');
       this.announce('失误超过三次，正在生成新一轮泡泡');
     }
-    if (update.effect === 'reward-picked') this.flashToast(snapshot.enemyIsBoss ? 'Boss 战' : `第 ${snapshot.battle} 战`, true);
+    if (update.effect === 'reward-picked') this.flashToast(snapshot.enemyIsBoss ? 'Boss 战' : `第 ${snapshot.battle} 战`, 'battle');
     if (update.effect === 'start') this.announce(`${snapshot.mode ? MODE_LABEL[snapshot.mode] : ''}开始`);
     if (['mistake', 'counter-miss', 'enemy-impact', 'timeout-impact'].includes(update.effect) && snapshot.phase === 'game-over') this.announce('挑战失败');
     if (update.effect === 'victory') this.announce('挑战成功');
@@ -217,17 +221,39 @@ export class AppUI {
     this.get<HTMLButtonElement>('#settings-close').focus();
   }
 
+  setLoadingProgress(progress: number): void {
+    this.loadingProgress = Math.max(this.loadingProgress, Math.min(1, progress));
+    this.get('#loading-progress-fill').style.width = `${this.loadingProgress * 100}%`;
+    this.text('#loading-progress-value', `${Math.round(this.loadingProgress * 100)}%`);
+  }
+
+  completeLoading(): void {
+    this.setLoadingProgress(1);
+    const delay = Math.max(0, 1200 - (performance.now() - this.loadingStartedAt));
+    window.setTimeout(() => {
+      this.resourcesReady = true;
+      const loading = this.get('#loading-screen');
+      loading.classList.add('is-complete');
+      this.get('#menu-screen').classList.toggle('is-visible', this.latestSnapshot.phase === 'menu');
+      window.setTimeout(() => {
+        loading.classList.remove('is-visible');
+        loading.setAttribute('aria-hidden', 'true');
+      }, 360);
+    }, delay);
+  }
+
   private closeSettings(): void {
     this.get('#settings-modal').classList.remove('is-visible');
     if (this.settingsPausedGame && this.controller.getSnapshot().phase === 'paused') this.controller.resume();
     this.settingsPausedGame = false;
   }
 
-  private flashToast(message: string, combat = false): void {
+  private flashToast(message: string, placement: 'default' | 'combat' | 'battle' = 'default'): void {
     const toast = this.get('#level-toast');
     toast.textContent = message;
     toast.classList.remove('is-active');
-    toast.classList.toggle('is-combat', combat);
+    toast.classList.toggle('is-combat', placement === 'combat');
+    toast.classList.toggle('is-battle', placement === 'battle');
     void toast.offsetWidth;
     toast.classList.add('is-active');
   }
@@ -323,16 +349,38 @@ export class AppUI {
 
   private template(): string {
     return `
-      <section id="menu-screen" class="screen menu-screen is-visible" aria-label="主菜单">
+      <section id="loading-screen" class="loading-screen is-visible" aria-label="正在加载游戏资源" aria-live="polite">
+        <div class="loading-clash" aria-hidden="true">
+          <div class="loading-bubble-side">
+            ${[0, 1, 2, 3, 4, 5].map((index) => `<i style="--bubble-index:${index}"><span></span></i>`).join('')}
+          </div>
+          <div class="loading-impact"><i></i><i></i><i></i></div>
+          <div class="loading-monster-side">
+            <img class="loading-monster loading-monster--jelly" src="art/jelly-enemy.png" alt="">
+            <img class="loading-monster loading-monster--puffer" src="art/puffer-enemy.png" alt="">
+            <img class="loading-monster loading-monster--hermit" src="art/hermit-enemy.png" alt="">
+            <img class="loading-monster loading-monster--manta" src="art/manta-enemy.png" alt="">
+            <img class="loading-monster loading-monster--angler" src="art/angler-enemy.png" alt="">
+          </div>
+        </div>
+        <strong class="loading-message">加载资源中</strong>
+        <div class="loading-progress-wrap">
+          <div class="loading-progress-heading"><span>能量汇聚</span><b id="loading-progress-value">0%</b></div>
+          <div class="loading-progress-track liquid-meter"><i id="loading-progress-fill" class="liquid-fill"></i></div>
+        </div>
+      </section>
+
+      <section id="menu-screen" class="screen menu-screen" aria-label="主菜单">
         <header class="brand-block">
-          <div class="mascot-badge"><img src="art/icon-192.png" alt="微笑的蓝色泡泡角色"></div>
-          <p class="eyebrow">一眼 · 一记 · 一触</p>
-          <h1><span>泡泡</span>节拍</h1>
-          <p class="tagline">让眼睛记住，让泡泡替你战斗。</p>
+          <h1 class="game-logo" aria-label="泡泡侠大战海洋怪">
+            <span class="game-logo-row game-logo-row--top"><b class="game-logo-bubbles">泡泡</b><b class="game-logo-hero">侠</b></span>
+            <span class="game-logo-row game-logo-row--bottom"><b class="game-logo-versus">大战</b><b class="game-logo-ocean">海洋</b><b class="game-logo-monster">怪</b></span>
+            <i class="game-logo-orb game-logo-orb--one" aria-hidden="true"></i><i class="game-logo-orb game-logo-orb--two" aria-hidden="true"></i>
+          </h1>
         </header>
         <div class="menu-actions">
           <button id="start-game" class="primary-button menu-start" type="button">开始游戏</button>
-          <button id="menu-settings" class="menu-utility-button" type="button"><span aria-hidden="true">⚙</span>游戏设置</button>
+          <button id="menu-settings" class="menu-utility-button" type="button">设置</button>
         </div>
         <span id="best-run" class="sr-only">0</span>
       </section>

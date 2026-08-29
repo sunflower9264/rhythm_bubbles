@@ -19,12 +19,30 @@ const context = await browser.newContext({
 });
 const page = await context.newPage();
 const errors = [];
+await page.route(/\/audio\//, async (route) => {
+  await new Promise((resolve) => setTimeout(resolve, 700));
+  await route.continue();
+});
 page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`));
 page.on('console', (message) => {
   if (message.type() === 'error') errors.push(`console: ${message.text()}`);
 });
 
-await page.goto(`${BASE_URL}?seed=2654435761`, { waitUntil: 'networkidle' });
+await page.goto(`${BASE_URL}?seed=2654435761`, { waitUntil: 'domcontentloaded' });
+await page.locator('#loading-screen.is-visible').waitFor({ state: 'visible' });
+assert.equal(await page.locator('.loading-monster-side img').count(), 5, '加载页应展示当前全部五只怪物');
+assert.equal(await page.locator('.loading-bubble-side > i').count(), 6, '加载页左侧应形成泡泡阵营');
+assert.equal(await page.locator('.loading-message').textContent(), '加载资源中');
+await page.waitForFunction(() => [...document.querySelectorAll('.loading-monster-side img')]
+  .every((image) => image.complete && image.naturalWidth > 0));
+const loadingMessageBox = await page.locator('.loading-message').boundingBox();
+const loadingProgressBox = await page.locator('.loading-progress-track').boundingBox();
+assert.ok(loadingMessageBox && Math.abs(loadingMessageBox.y + loadingMessageBox.height / 2 - 422) <= 12,
+  '加载提示应位于屏幕正中');
+assert.ok(loadingProgressBox && loadingProgressBox.y > 700, '药剂进度条应位于加载页底部');
+await screenshot(page, '00-loading-screen.png');
+await page.locator('#loading-screen').waitFor({ state: 'hidden' });
+await page.waitForLoadState('networkidle');
 await page.waitForFunction(() => typeof window.render_game_to_text === 'function');
 assert.equal(await page.locator('#start-game').count(), 1);
 assert.equal(await page.locator('#menu-settings').count(), 1);
@@ -33,15 +51,19 @@ assert.equal(await page.locator('[data-mode]').count(), 0);
 assert.equal(await page.locator('#fullscreen-button').count(), 0);
 assert.equal(await page.locator('.run-preview').count(), 0);
 assert.equal(await page.locator('.menu-hint').count(), 0);
-assert.equal(await page.locator('#game-container canvas').getAttribute('aria-label'), '泡泡节拍游戏区：轻触泡泡进行游戏');
+assert.equal(await page.locator('.tagline, .eyebrow, .mascot-badge').count(), 0, '主页不应保留补充文案和旧头像');
+assert.equal((await page.locator('.game-logo').textContent())?.replace(/\s/g, ''), '泡泡侠大战海洋怪');
+assert.equal(await page.locator('#game-container canvas').getAttribute('aria-label'), '泡泡侠大战海洋怪游戏区：轻触泡泡进行游戏');
 await screenshot(page, '01-clean-menu.png');
 
 const shellBox = await page.locator('#game-shell').boundingBox();
 assert.ok(shellBox && shellBox.width <= 390 && shellBox.height <= 844);
 const startBox = await page.locator('#start-game').boundingBox();
 const settingsBox = await page.locator('#menu-settings').boundingBox();
-assert.ok(startBox && startBox.y > 420 && startBox.y < 680, '开始游戏应位于手机屏幕中偏下区域');
-assert.ok(settingsBox && settingsBox.y > startBox.y + startBox.height, '游戏设置应位于开始游戏下方');
+const logoBox = await page.locator('.game-logo').boundingBox();
+assert.ok(startBox && logoBox && startBox.y > logoBox.y + logoBox.height + 45 && startBox.y < 620,
+  '开始游戏应位于艺术字标题下方');
+assert.ok(settingsBox && settingsBox.y >= startBox.y + startBox.height + 24, '开始游戏与设置之间应留出明显间隔');
 
 await page.locator('#start-game').tap();
 await page.evaluate(() => window.advanceTime(0));
@@ -62,7 +84,7 @@ state = await readState(page);
 assert.ok(Math.abs(state.feedback.enemy.displayWidth - 288) <= 1, '普通怪物应比上一版更大');
 assert.deepEqual(state.grid, { rows: 4, cols: 4 }, '所有战斗应固定使用 4x4 泡泡盘面');
 assert.equal(state.timerMs, 0, '盘面倒计时应已取消');
-assert.equal(await page.locator('.liquid-meter').count(), 6, '玩家三状态、敌人生命、蓄力和 Combo 应统一使用液体数值条');
+assert.equal(await page.locator('.liquid-meter:not(.loading-progress-track)').count(), 6, '玩家三状态、敌人生命、蓄力和 Combo 应统一使用液体数值条');
 assert.equal(await page.locator('#battle-value, #enemy-attack-damage, #score-value, #attack-value, #shield-value, #mistake-value').count(), 0,
   '旧战数、伤害、得分、攻击、护盾标签和失误标签应全部移除');
 assert.equal(await page.locator('#timer-fill, #time-value, #mode-name, .mode-pill, .objective-chip, #play-prompt, #target-counter').count(), 0,
@@ -133,6 +155,11 @@ await page.waitForTimeout(100);
 state = await readState(page);
 assert.equal(state.score, 10);
 assert.equal(state.battle.enemy.hp, 142);
+const combatTextAnchorY = state.feedback.combatText.anchorY;
+const combatTextScreenY = gameplayCanvasBox.y + combatTextAnchorY / 1280 * gameplayCanvasBox.height;
+assert.equal(state.feedback.combatText.message, '-8');
+assert.ok(combatTextScreenY > enemyHudBox.y + enemyHudBox.height && combatTextScreenY < enemyScreenCenterY,
+  '战斗浮字应位于怪物 HUD 与怪物中心之间');
 assert.ok(state.feedback.transformedBubbles.every((bubble) => bubble.index === firstTarget.index),
   '正确点击期间只有被点击泡泡可以产生形变');
 assert.equal(await page.locator('#player-energy-value').textContent(), `${Math.round((state.targetCount - state.remainingTargets) / state.targetCount * 100)}%`);
@@ -155,6 +182,7 @@ const counterMissIndex = state.battle.enemy.intentTargets[1];
 await page.waitForTimeout(120);
 state = await readState(page);
 assert.equal(state.battle.player.hp, hpBeforeCounterMiss - counterMissDamage);
+assert.equal(state.feedback.combatText.anchorY, combatTextAnchorY, '失误反馈应复用统一的怪物上方锚点');
 assert.equal(state.battle.enemy.intentCursor, 0);
 assert.equal(state.battle.player.mistakes, 1);
 assert.ok(state.feedback.transformedBubbles.every((bubble) => bubble.index === counterMissIndex),
@@ -164,6 +192,7 @@ await page.evaluate((milliseconds) => window.advanceTime(milliseconds), state.ba
 state = await readState(page);
 assert.equal(state.battle.enemy.attackState, 'recovery');
 assert.equal(state.battle.player.hp, hpBeforeCounterMiss - counterMissDamage - enemyImpactDamage);
+assert.equal(state.feedback.combatText.anchorY, combatTextAnchorY, '怪物伤害反馈应复用统一的怪物上方锚点');
 assert.equal(state.feedback.intentLinks.rendered, 0, '怪物撞屏时应清除目标连线');
 assert.ok(state.feedback.enemy.y >= 700, '第一战应由怪物本体撞向屏幕');
 assert.ok(state.feedback.enemy.scaleX >= 0.4, '怪物撞屏时应明显放大');
@@ -189,6 +218,7 @@ assert.equal(state.battle.enemy.attackState, 'windup');
 state = await resolveIntent(page, state);
 assert.equal(state.battle.enemy.attackState, 'staggered');
 assert.equal(state.battle.enemy.poise, 0);
+assert.equal(state.feedback.combatText.anchorY, combatTextAnchorY, '破势反馈应复用统一的怪物上方锚点');
 assert.equal(await page.locator('#enemy-attack-label').textContent(), '破势！伤害 ×1.5');
 await page.locator('#level-toast.is-combat.is-active').waitFor({ state: 'visible' });
 await page.locator('#level-toast').evaluate((element) => element.getAnimations().forEach((animation) => {
@@ -196,10 +226,13 @@ await page.locator('#level-toast').evaluate((element) => element.getAnimations()
   animation.pause();
 }));
 const counterToastBox = await page.locator('#level-toast').boundingBox();
-const counterComboBox = await page.locator('#combo-burst').boundingBox();
-assert.ok(counterToastBox && counterComboBox);
-assert.ok(counterToastBox.x < 40, '反制提示应贴近屏幕左侧');
-assert.ok(Math.abs(counterToastBox.y - counterComboBox.y) <= 20, '反制提示应与 HIT Combo 高度接近');
+const currentEnemyTop = gameplayCanvasBox.y
+  + (state.feedback.enemy.y - state.feedback.enemy.displayHeight / 2) / 1280 * gameplayCanvasBox.height;
+assert.ok(counterToastBox);
+assert.ok(Math.abs(counterToastBox.x + counterToastBox.width / 2 - (shellBox.x + shellBox.width / 2)) <= 2,
+  '反制提示应与怪物水平居中');
+assert.ok(counterToastBox.y + counterToastBox.height <= currentEnemyTop + 18,
+  '反制提示应统一显示在怪物上方');
 await screenshot(page, '05-jelly-staggered.png');
 await page.locator('#level-toast').evaluate((element) => element.getAnimations().forEach((animation) => animation.play()));
 
@@ -247,7 +280,7 @@ for (let guard = 0; guard < 1400; guard += 1) {
     const shieldIndex = state.battle.rewards.findIndex((reward) => reward.id === 'shield');
     await page.evaluate((index) => window.selectReward(index), state.battle.current === 1 && shieldIndex >= 0 ? shieldIndex : 0);
     if (!sawBattleToast) {
-      const battleToast = page.locator('#level-toast.is-combat.is-active');
+      const battleToast = page.locator('#level-toast.is-battle.is-active');
       await battleToast.waitFor({ state: 'visible' });
       assert.equal(await battleToast.textContent(), '第 2 战');
       await battleToast.evaluate((element) => element.getAnimations().forEach((animation) => {

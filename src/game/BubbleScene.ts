@@ -46,6 +46,8 @@ export class BubbleScene extends Phaser.Scene {
   private shieldVisualMax = 0;
   private shieldImpact?: Phaser.GameObjects.Graphics;
   private enemyCenterY = ENEMY_CENTER_Y;
+  private combatText?: Phaser.GameObjects.Text;
+  private lastCombatText = { message: '', y: 0 };
 
   constructor(private readonly controller: GameController) {
     super({ key: 'BubbleScene' });
@@ -74,6 +76,7 @@ export class BubbleScene extends Phaser.Scene {
 
   create(): void {
     this.enemyCenterY = this.resolveEnemyCenterY();
+    window.dispatchEvent(new Event('phaser-scene-ready'));
     this.cameras.main.setBackgroundColor('#cdefe4');
     this.background = this.add.image(WIDTH / 2, HEIGHT / 2, 'garden-bg');
     this.background.setDisplaySize(WIDTH, HEIGHT);
@@ -101,7 +104,7 @@ export class BubbleScene extends Phaser.Scene {
     this.shieldAura = this.add.graphics().setDepth(46);
     this.drawBoard();
 
-    this.game.canvas.setAttribute('aria-label', '泡泡节拍游戏区：轻触泡泡进行游戏');
+    this.game.canvas.setAttribute('aria-label', '泡泡侠大战海洋怪游戏区：轻触泡泡进行游戏');
     this.game.canvas.setAttribute('role', 'application');
     this.game.canvas.addEventListener('pointerup', this.handleCanvasPointer, { passive: true });
 
@@ -152,6 +155,11 @@ export class BubbleScene extends Phaser.Scene {
         scaleX: Number(this.enemy.scaleX.toFixed(3)),
         scaleY: Number(this.enemy.scaleY.toFixed(3)),
       } : null,
+      combatText: {
+        visible: Boolean(this.combatText?.active),
+        message: this.lastCombatText.message,
+        anchorY: Math.round(this.lastCombatText.y),
+      },
       transformedBubbles: this.bubbleViews
         .map((view, index) => ({
           index,
@@ -728,7 +736,7 @@ export class BubbleScene extends Phaser.Scene {
         this.dropletEmitter.explode(42, this.enemy.x, this.enemy.y);
       }
     }
-    this.floatCombatText(defeated ? '完美收尾！' : `-${damage}`, WIDTH / 2, this.enemyCenterY - 40, defeated ? '#ff6f7d' : '#7358b8', defeated ? 42 : 32);
+    this.floatCombatText(defeated ? '完美收尾！' : `-${damage}`, defeated ? '#ff6f7d' : '#7358b8', defeated ? 42 : 32);
   }
 
   private animateEnemyWindup(): void {
@@ -792,7 +800,7 @@ export class BubbleScene extends Phaser.Scene {
       });
     }
     const label = timeout ? '超时重击' : blocked > 0 ? `护盾挡住 ${blocked}` : '撞击';
-    this.floatCombatText(`${label} · ${damage > 0 ? `生命 -${damage}` : '完全格挡'}`, WIDTH / 2, 430, blocked > 0 ? '#5267a8' : '#e96973', timeout ? 38 : 34);
+    this.floatCombatText(`${label} · ${damage > 0 ? `生命 -${damage}` : '完全格挡'}`, blocked > 0 ? '#5267a8' : '#e96973', timeout ? 38 : 34);
   }
 
   private animateEnemyStaggered(damage: number, reduction: number): void {
@@ -815,7 +823,7 @@ export class BubbleScene extends Phaser.Scene {
       this.dropletEmitter.explode(22, this.enemy.x, this.enemy.y);
     }
     const reductionPercent = Math.round(reduction * 1000) / 10;
-    this.floatCombatText(`-${damage} · 蓄力 -${reductionPercent}%`, WIDTH / 2, this.enemyCenterY - 48, '#2f9f96', 34);
+    this.floatCombatText(`-${damage} · 蓄力 -${reductionPercent}%`, '#2f9f96', 34);
   }
 
   private animateEnemyBreak(): void {
@@ -836,14 +844,14 @@ export class BubbleScene extends Phaser.Scene {
       });
       this.dropletEmitter.explode(34, this.enemy.x, this.enemy.y);
     }
-    this.floatCombatText('破势！伤害 ×1.5', WIDTH / 2, this.enemyCenterY - 54, '#2f9f96', 38);
+    this.floatCombatText('破势！伤害 ×1.5', '#2f9f96', 38);
   }
 
   private floatPlayerDamage(prefix: string): void {
     const blocked = this.latestSnapshot.lastBlockedDamage;
     const damage = this.latestSnapshot.lastEnemyDamage;
     const message = blocked > 0 ? `${prefix} · 护盾 -${blocked}` : `${prefix} · 生命 -${damage}`;
-    this.floatCombatText(message, WIDTH / 2, 430, blocked > 0 ? '#5267a8' : '#e96973', 30);
+    this.floatCombatText(message, blocked > 0 ? '#5267a8' : '#e96973', 30);
   }
 
   private restoreEnemyPose(): void {
@@ -872,8 +880,13 @@ export class BubbleScene extends Phaser.Scene {
     return Phaser.Math.Clamp((screenCenter - canvasRect.top) / canvasRect.height * HEIGHT, 390, 520);
   }
 
-  private floatCombatText(message: string, x: number, y: number, color: string, size: number): void {
-    const text = this.add.text(x, y, message, {
+  private floatCombatText(message: string, color: string, size: number): void {
+    if (this.combatText?.active) {
+      this.tweens.killTweensOf(this.combatText);
+      this.destroyTransient(this.combatText);
+    }
+    const y = this.resolveCombatFeedbackY();
+    const text = this.add.text(WIDTH / 2, y, message, {
       fontFamily: '"Avenir Next Rounded", "PingFang SC", sans-serif',
       fontSize: `${size}px`,
       fontStyle: 'bold',
@@ -881,15 +894,31 @@ export class BubbleScene extends Phaser.Scene {
       stroke: '#fffdf4',
       strokeThickness: 7,
     }).setOrigin(0.5).setDepth(40).setScale(0.65);
+    this.combatText = text;
+    this.lastCombatText = { message, y };
     this.transientEffects.add(text);
     this.tweens.add({
       targets: text,
-      y: y - 46,
+      y: y + 10,
       scale: 1,
       duration: 180,
       ease: 'Back.Out',
-      onComplete: () => this.destroyAfterTween(text, { y: y - 76, alpha: 0, duration: 250, delay: 90, ease: 'Cubic.In' }),
+      onComplete: () => this.destroyAfterTween(text, { y: y + 28, alpha: 0, duration: 250, delay: 90, ease: 'Cubic.In' }),
     });
+  }
+
+  private resolveCombatFeedbackY(): number {
+    const canvasRect = this.game.canvas.getBoundingClientRect();
+    const enemyHudRect = document.getElementById('enemy-status')?.getBoundingClientRect();
+    const enemyRestHeight = this.enemy.height * this.enemyRestScaleY;
+    const enemyTop = this.enemyCenterY - enemyRestHeight / 2;
+    if (!enemyHudRect || canvasRect.height <= 0) return enemyTop - 24;
+    const hudBottom = (enemyHudRect.bottom - canvasRect.top) / canvasRect.height * HEIGHT;
+    return Phaser.Math.Clamp(
+      Math.max(enemyTop - 24, hudBottom + 40),
+      80,
+      this.enemyCenterY - 32,
+    );
   }
 
   private createWrongRipple(x: number, y: number, diameter: number): void {
@@ -910,6 +939,7 @@ export class BubbleScene extends Phaser.Scene {
 
   private destroyTransient(target: Phaser.GameObjects.GameObject): void {
     this.transientEffects.delete(target);
+    if (target === this.combatText) this.combatText = undefined;
     target.destroy();
   }
 
@@ -963,6 +993,7 @@ export class BubbleScene extends Phaser.Scene {
       effect.destroy();
     }
     this.transientEffects.clear();
+    this.combatText = undefined;
   }
 
   private createAmbientBubbles(): void {

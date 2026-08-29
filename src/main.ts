@@ -9,31 +9,70 @@ import { AppUI } from './ui/AppUI';
 const seed = Number(new URLSearchParams(window.location.search).get('seed'));
 const controller = new GameController(Number.isFinite(seed) && seed > 0 ? createSeededRandom(seed) : undefined);
 const scene = new BubbleScene(controller);
+const appUI = new AppUI(controller, requireElement('ui-layer'));
 
-new AppUI(controller, requireElement('ui-layer'));
+const GAME_RESOURCES = [
+  'art/bubble-garden.webp',
+  'art/jelly-enemy.png',
+  'art/angler-enemy.png',
+  'art/hermit-enemy.png',
+  'art/manta-enemy.png',
+  'art/puffer-enemy.png',
+  'audio/bubble-garden-groove-v2.wav',
+  'audio/tap.wav',
+  'audio/correct-pop-1.wav',
+  'audio/correct-pop-2.wav',
+  'audio/correct-pop-3.wav',
+  'audio/wrong-wobble.wav',
+  'audio/level-up.wav',
+  'audio/countdown.wav',
+  'audio/enemy-hit.wav',
+  'audio/enemy-attack.wav',
+  'audio/shield-break.wav',
+  'audio/victory.wav',
+];
 
-new Phaser.Game({
-  type: Phaser.AUTO,
-  parent: 'game-container',
-  width: 720,
-  height: 1280,
-  transparent: true,
-  antialias: true,
-  render: {
-    antialiasGL: true,
-    powerPreference: 'high-performance',
-  },
-  scale: {
-    mode: Phaser.Scale.FIT,
-    autoCenter: Phaser.Scale.CENTER_BOTH,
+void bootGame();
+
+async function bootGame(): Promise<void> {
+  let completed = 0;
+  await Promise.all(GAME_RESOURCES.map(async (resource) => {
+    try {
+      const response = await fetch(resource, { cache: 'force-cache' });
+      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+      await response.arrayBuffer();
+    } catch (error) {
+      console.warn(`Unable to preload ${resource}; Phaser will retry it.`, error);
+    } finally {
+      completed += 1;
+      appUI.setLoadingProgress(completed / GAME_RESOURCES.length);
+    }
+  }));
+
+  window.addEventListener('phaser-scene-ready', () => appUI.completeLoading(), { once: true });
+  new Phaser.Game({
+    type: Phaser.AUTO,
+    parent: 'game-container',
     width: 720,
     height: 1280,
-  },
-  audio: {
-    disableWebAudio: false,
-  },
-  scene: [scene],
-});
+    transparent: true,
+    antialias: true,
+    render: {
+      antialiasGL: true,
+      powerPreference: 'high-performance',
+    },
+    scale: {
+      mode: Phaser.Scale.FIT,
+      autoCenter: Phaser.Scale.CENTER_BOTH,
+      width: 720,
+      height: 1280,
+    },
+    audio: {
+      disableWebAudio: false,
+    },
+    scene: [scene],
+  });
+}
 
 window.render_game_to_text = () => {
   const snapshot = controller.getSnapshot();
