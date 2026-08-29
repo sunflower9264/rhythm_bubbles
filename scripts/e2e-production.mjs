@@ -54,6 +54,22 @@ await screenshot(page, '00-loading-screen.png');
 await page.locator('#loading-screen').waitFor({ state: 'hidden' });
 await page.waitForLoadState('networkidle');
 await page.waitForFunction(() => typeof window.render_game_to_text === 'function');
+const sfxDurations = await page.evaluate(async () => {
+  const files = ['tap.wav', 'correct-pop-1.wav', 'correct-pop-2.wav', 'correct-pop-3.wav', 'enemy-attack.wav'];
+  return Promise.all(files.map(async (file) => {
+    const data = await (await fetch(`audio/${file}`)).arrayBuffer();
+    const view = new DataView(data);
+    const duration = view.getUint32(40, true) / view.getUint32(24, true) / 2;
+    return [file, Number(duration.toFixed(2))];
+  }));
+});
+assert.deepEqual(Object.fromEntries(sfxDurations), {
+  'tap.wav': 0.18,
+  'correct-pop-1.wav': 0.34,
+  'correct-pop-2.wav': 0.34,
+  'correct-pop-3.wav': 0.34,
+  'enemy-attack.wav': 0.92,
+}, '三组新音效应加载为预期长度的原创 WAV');
 assert.equal(await page.locator('#start-game').count(), 1);
 assert.equal(await page.locator('#menu-settings').count(), 1);
 assert.equal(await page.locator('#menu-help').count(), 0);
@@ -210,6 +226,9 @@ await page.waitForTimeout(100);
 state = await readState(page);
 assert.equal(state.score, 10);
 assert.equal(state.battle.enemy.hp, 142);
+assert.equal(state.feedback.audio.recentSfx.at(-3), 'tap', '点击泡泡应先播放戳破泡泡音效');
+assert.match(state.feedback.audio.recentSfx.at(-2), /^correct-pop-[1-3]$/, '正确点击应播放独立的成功确认音效');
+assert.equal(state.feedback.audio.recentSfx.at(-1), 'enemy-hit');
 const combatTextAnchorY = state.feedback.combatText.anchorY;
 const combatTextScreenY = gameplayCanvasBox.y + combatTextAnchorY / 1280 * gameplayCanvasBox.height;
 assert.equal(state.feedback.combatText.message, '-8');
@@ -251,6 +270,7 @@ assert.equal(state.feedback.combatText.anchorY, combatTextAnchorY, '怪物伤害
 assert.equal(state.feedback.intentLinks.rendered, 0, '怪物撞屏时应清除目标连线');
 assert.ok(state.feedback.enemy.y >= 700, '第一战应由怪物本体撞向屏幕');
 assert.ok(state.feedback.enemy.scaleX >= 0.4, '怪物撞屏时应明显放大');
+assert.equal(state.feedback.audio.recentSfx.at(-1), 'enemy-attack', '怪物撞屏应播放水下重击音效');
 await screenshot(page, '04-jelly-screen-impact.png');
 await page.reload({ waitUntil: 'networkidle' });
 await page.locator('#start-game').tap();

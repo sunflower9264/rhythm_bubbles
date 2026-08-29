@@ -44,6 +44,56 @@ function addNoise(buffer, start, duration, gain) {
   }
 }
 
+function addGlideTone(
+  buffer,
+  start,
+  duration,
+  startFrequency,
+  endFrequency,
+  gain,
+  type = 'sine',
+  decay = 12,
+) {
+  const startSample = Math.floor(start * SAMPLE_RATE);
+  const endSample = Math.min(buffer.length, Math.ceil((start + duration) * SAMPLE_RATE));
+  let phase = 0;
+  for (let sample = startSample; sample < endSample; sample += 1) {
+    const time = (sample - startSample) / SAMPLE_RATE;
+    const progress = Math.min(1, time / duration);
+    const frequency = startFrequency * Math.pow(endFrequency / startFrequency, progress);
+    phase += (Math.PI * 2 * frequency) / SAMPLE_RATE;
+    const attack = Math.min(1, time / 0.0025);
+    const release = Math.min(1, Math.max(0, (duration - time) / 0.025));
+    buffer[sample] += osc(type, phase) * gain * attack * release * Math.exp(-time * decay);
+  }
+}
+
+function addFilteredNoise(buffer, start, duration, gain, seedOffset, mode, smoothing, decay) {
+  const startSample = Math.floor(start * SAMPLE_RATE);
+  const endSample = Math.min(buffer.length, Math.ceil((start + duration) * SAMPLE_RATE));
+  let seed = (0x68bc21eb + seedOffset) >>> 0;
+  let lowPassed = 0;
+  for (let sample = startSample; sample < endSample; sample += 1) {
+    seed = (seed * 1_664_525 + 1_013_904_223) >>> 0;
+    const noise = (seed / 0xffffffff) * 2 - 1;
+    lowPassed += (noise - lowPassed) * smoothing;
+    const filtered = mode === 'low' ? lowPassed : noise - lowPassed;
+    const time = (sample - startSample) / SAMPLE_RATE;
+    const attack = Math.min(1, time / 0.002);
+    const release = Math.min(1, Math.max(0, (duration - time) / 0.035));
+    buffer[sample] += filtered * gain * attack * release * Math.exp(-time * decay);
+  }
+}
+
+function addBubbleBurst(buffer, start, bodyFrequency, gain, seedOffset) {
+  // A soft pressure drop gives the pop its round body; the filtered snap reads
+  // as a thin membrane breaking, while the rising droplet keeps it aquatic.
+  addGlideTone(buffer, start, 0.12, bodyFrequency, bodyFrequency * 0.3, gain, 'sine', 21);
+  addGlideTone(buffer, start + 0.004, 0.075, bodyFrequency * 1.8, bodyFrequency * 0.7, gain * 0.2, 'triangle', 31);
+  addFilteredNoise(buffer, start, 0.032, gain * 0.32, seedOffset, 'high', 0.16, 76);
+  addGlideTone(buffer, start + 0.022, 0.105, 1180, 1620, gain * 0.13, 'sine', 19);
+}
+
 function addKick(buffer, start, gain = 0.52) {
   const duration = 0.2;
   const startSample = Math.floor(start * SAMPLE_RATE);
@@ -128,26 +178,24 @@ function makeSfx(name, duration, compose) {
   writeWav(name, buffer);
 }
 
-makeSfx('tap.wav', 0.16, (buffer) => {
-  addTone(buffer, 0, 0.11, 420, 0.45, 'sine', 0.35);
-  addTone(buffer, 0.012, 0.12, 840, 0.16, 'triangle', -0.2);
-  addNoise(buffer, 0, 0.035, 0.06);
+makeSfx('tap.wav', 0.18, (buffer) => {
+  addBubbleBurst(buffer, 0, 610, 0.52, 11);
 });
 
 const correctPopNotes = [
-  [523.25, 659.25, 783.99],
-  [587.33, 739.99, 880.0],
-  [493.88, 622.25, 739.99],
+  [659.25, 987.77],
+  [698.46, 1046.5],
+  [783.99, 1174.66],
 ];
 
 correctPopNotes.forEach((notes, variantIndex) => {
-  makeSfx(`correct-pop-${variantIndex + 1}.wav`, 0.46, (buffer) => {
-    addTone(buffer, 0, 0.09, notes[0] / 2, 0.22, 'sine', 0.08);
-    addTone(buffer, 0.015, 0.16, notes[0], 0.24, 'triangle', 0.06);
-    addTone(buffer, 0.055, 0.18, notes[1], 0.27, 'sine', 0.04);
-    addTone(buffer, 0.1, 0.24, notes[2], 0.25, 'triangle');
-    addTone(buffer, 0.03, 0.36, notes[2] * 2, 0.055, 'sine', 0.12);
-    addNoise(buffer, 0.08, 0.045, 0.025 + variantIndex * 0.004);
+  makeSfx(`correct-pop-${variantIndex + 1}.wav`, 0.34, (buffer) => {
+    // The input pop already owns the transient. Success answers with a clean,
+    // two-step water-glass rise so rapid correct taps stay readable, not noisy.
+    addGlideTone(buffer, 0.012, 0.15, notes[0] * 0.9, notes[0], 0.22, 'sine', 9);
+    addGlideTone(buffer, 0.072, 0.22, notes[1] * 0.92, notes[1] * 1.035, 0.28, 'sine', 7);
+    addGlideTone(buffer, 0.084, 0.2, notes[1] * 1.96, notes[1] * 2.04, 0.055, 'sine', 9);
+    addFilteredNoise(buffer, 0.068, 0.026, 0.018, 40 + variantIndex, 'high', 0.12, 82);
   });
 });
 
@@ -178,10 +226,19 @@ makeSfx('enemy-hit.wav', 0.42, (buffer) => {
   addNoise(buffer, 0.01, 0.055, 0.08);
 });
 
-makeSfx('enemy-attack.wav', 0.62, (buffer) => {
-  addTone(buffer, 0, 0.26, 164.81, 0.32, 'triangle', -0.5);
-  addTone(buffer, 0.08, 0.32, 110, 0.24, 'sine', -0.24);
-  addNoise(buffer, 0.02, 0.16, 0.11);
+makeSfx('enemy-attack.wav', 0.92, (buffer) => {
+  // A submerged creature collision: immediate water-pressure thump, rubbery
+  // body weight and a foamy wash. It stays rounded rather than explosive so it
+  // fits the game's soft ocean art while remaining much heavier than a tap.
+  addGlideTone(buffer, 0, 0.5, 112, 38, 0.42, 'sine', 5.8);
+  addGlideTone(buffer, 0.006, 0.28, 224, 78, 0.28, 'triangle', 9.5);
+  addGlideTone(buffer, 0.004, 0.22, 460, 130, 0.32, 'triangle', 12);
+  addFilteredNoise(buffer, 0, 0.13, 0.3, 301, 'high', 0.09, 30);
+  addFilteredNoise(buffer, 0.018, 0.68, 0.25, 707, 'low', 0.035, 3.1);
+  addGlideTone(buffer, 0.12, 0.56, 68, 44, 0.2, 'triangle', 3.4);
+  [0.07, 0.12, 0.19, 0.27].forEach((start, index) => {
+    addBubbleBurst(buffer, start, 420 + index * 95, 0.065 - index * 0.007, 800 + index);
+  });
 });
 
 makeSfx('shield-break.wav', 0.76, (buffer) => {

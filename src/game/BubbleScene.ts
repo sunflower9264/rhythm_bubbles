@@ -50,6 +50,7 @@ export class BubbleScene extends Phaser.Scene {
   private enemyCenterY = ENEMY_CENTER_Y;
   private combatText?: Phaser.GameObjects.Text;
   private lastCombatText = { message: '', y: 0 };
+  private recentSfx: string[] = [];
 
   constructor(private readonly controller: GameController) {
     super({ key: 'BubbleScene' });
@@ -162,6 +163,9 @@ export class BubbleScene extends Phaser.Scene {
         visible: Boolean(this.combatText?.active),
         message: this.lastCombatText.message,
         anchorY: Math.round(this.lastCombatText.y),
+      },
+      audio: {
+        recentSfx: this.recentSfx,
       },
       transformedBubbles: this.bubbleViews
         .map((view, index) => ({
@@ -354,28 +358,28 @@ export class BubbleScene extends Phaser.Scene {
     if (!this.preferences.sound) return;
     if (bubbleHitEffects.includes(effect) && effectIndex !== undefined) {
       const variation = ((Math.floor(this.latestSnapshot.score / 10) + (effectIndex ?? 0)) % 3) + 1;
-      this.sound.play(`correct-pop-${variation}`, { volume: 0.4 });
-      this.sound.play('enemy-hit', { volume: this.latestSnapshot.lastAttackReduction > 0 ? 0.4 : 0.22 });
+      this.playSfx(`correct-pop-${variation}`, 0.4);
+      this.playSfx('enemy-hit', this.latestSnapshot.lastAttackReduction > 0 ? 0.4 : 0.22);
     }
-    if (effect === 'enemy-windup') this.sound.play('countdown', { volume: 0.32 });
-    if (effect === 'enemy-break') this.sound.play('level-up', { volume: 0.48 });
+    if (effect === 'enemy-windup') this.playSfx('countdown', 0.32);
+    if (effect === 'enemy-break') this.playSfx('level-up', 0.48);
     if (['enemy-impact', 'timeout-impact'].includes(effect)) {
-      this.sound.play('enemy-attack', { volume: effect === 'timeout-impact' ? 0.62 : this.latestSnapshot.battle === 1 ? 0.44 : 0.52 });
+      this.playSfx('enemy-attack', effect === 'timeout-impact' ? 0.62 : this.latestSnapshot.battle === 1 ? 0.44 : 0.52);
     }
     if (['enemy-impact', 'timeout-impact'].includes(effect)
       && this.latestSnapshot.lastBlockedDamage > 0 && this.latestSnapshot.shield === 0) {
-      this.sound.play('shield-break', { volume: 0.62 });
+      this.playSfx('shield-break', 0.62);
     }
     if (this.latestSnapshot.lastAttackReduction > 0 && ['board-clear', 'enemy-staggered'].includes(effect)) {
-      this.sound.play('level-up', { volume: 0.24 });
+      this.playSfx('level-up', 0.24);
     }
     if (effect === 'encounter-win') {
-      this.sound.play('enemy-hit', { volume: 0.5 });
-      this.time.delayedCall(110, () => this.sound.play('level-up', { volume: 0.42 }));
+      this.playSfx('enemy-hit', 0.5);
+      this.time.delayedCall(110, () => this.playSfx('level-up', 0.42));
     }
-    if (effect === 'victory') this.sound.play('victory', { volume: 0.52 });
-    if (['mistake', 'mistake-overflow', 'counter-miss'].includes(effect)) this.sound.play('wrong-wobble', { volume: effect === 'mistake-overflow' ? 0.48 : 0.38 });
-    if (effect === 'countdown') this.sound.play('countdown', { volume: 0.23 });
+    if (effect === 'victory') this.playSfx('victory', 0.52);
+    if (['mistake', 'mistake-overflow', 'counter-miss'].includes(effect)) this.playSfx('wrong-wobble', effect === 'mistake-overflow' ? 0.48 : 0.38);
+    if (effect === 'countdown') this.playSfx('countdown', 0.23);
   }
 
   private animateCorrectAt(index: number, large: boolean): void {
@@ -956,6 +960,12 @@ export class BubbleScene extends Phaser.Scene {
     if (!this.bgm.isPlaying) this.bgm.play();
   }
 
+  private playSfx(key: string, volume: number): void {
+    this.recentSfx.push(key);
+    if (this.recentSfx.length > 12) this.recentSfx.shift();
+    this.sound.play(key, { volume });
+  }
+
   private readonly handleCanvasPointer = (event: PointerEvent): void => {
     const snapshot = this.controller.getSnapshot();
     if (snapshot.phase !== 'playing') return;
@@ -977,7 +987,7 @@ export class BubbleScene extends Phaser.Scene {
     }
 
     if (selectedIndex < 0) return;
-    if (this.preferences.sound) this.sound.play('tap', { volume: 0.2 });
+    if (this.preferences.sound) this.playSfx('tap', 0.2);
     this.controller.select(selectedIndex);
   };
 
