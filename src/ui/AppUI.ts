@@ -6,6 +6,15 @@ const MODE_LABEL: Record<GameMode, string> = {
   memory: '记忆',
   sequence: '旋律',
 };
+
+const MENU_ENEMIES = [
+  { id: 'jelly', texture: 'jelly-enemy' },
+  { id: 'angler', texture: 'angler-enemy' },
+  { id: 'hermit', texture: 'hermit-enemy' },
+  { id: 'manta', texture: 'manta-enemy' },
+  { id: 'puffer', texture: 'puffer-enemy' },
+] as const;
+
 export class AppUI {
   private readonly root: HTMLElement;
   private settingsPausedGame = false;
@@ -20,10 +29,12 @@ export class AppUI {
   private readonly loadingStartedAt = performance.now();
   private loadingProgress = 0;
   private resourcesReady = false;
+  private menuEnemyIndex = -1;
 
   constructor(private readonly controller: GameController, root: HTMLElement) {
     this.root = root;
     this.root.innerHTML = this.template();
+    this.selectMenuEnemy();
     this.bindEvents();
     this.controller.subscribe((update, preferences) => this.sync(update, preferences));
   }
@@ -72,6 +83,8 @@ export class AppUI {
     const reward = this.get('#reward-modal');
     const victory = this.get('#victory-modal');
     this.root.closest('#game-shell')?.classList.toggle('is-menu', snapshot.phase === 'menu');
+
+    if (update.effect === 'home') this.selectMenuEnemy();
 
     menu.classList.toggle('is-visible', this.resourcesReady && snapshot.phase === 'menu');
     hud.classList.toggle('is-visible', snapshot.phase !== 'menu');
@@ -341,6 +354,15 @@ export class AppUI {
     this.get(selector).textContent = value;
   }
 
+  private selectMenuEnemy(): void {
+    let nextIndex = Math.floor(Math.random() * MENU_ENEMIES.length);
+    if (nextIndex === this.menuEnemyIndex) nextIndex = (nextIndex + 1) % MENU_ENEMIES.length;
+    this.menuEnemyIndex = nextIndex;
+    const enemy = MENU_ENEMIES[nextIndex];
+    this.get('#menu-encounter').dataset.enemy = enemy.id;
+    this.get<HTMLImageElement>('#menu-featured-enemy').src = `art/${enemy.texture}.png`;
+  }
+
   private get<T extends HTMLElement = HTMLElement>(selector: string): T {
     const element = this.root.querySelector<T>(selector);
     if (!element) throw new Error(`Missing UI element: ${selector}`);
@@ -366,6 +388,15 @@ export class AppUI {
         <div class="menu-actions">
           <button id="start-game" class="primary-button menu-start" type="button">开始游戏</button>
           <button id="menu-settings" class="menu-utility-button" type="button">设置</button>
+        </div>
+        <div id="menu-encounter" class="menu-encounter" data-enemy="jelly" aria-hidden="true">
+          <div class="menu-bubble-squad">
+            <i class="menu-bubble menu-bubble--leader"><span></span></i>
+            <i class="menu-bubble menu-bubble--wing"><span></span></i>
+            <i class="menu-bubble menu-bubble--scout"><span></span></i>
+          </div>
+          <div class="menu-current"><i></i></div>
+          <img id="menu-featured-enemy" class="menu-featured-enemy" src="art/jelly-enemy.png" alt="">
         </div>
         <span id="best-run" class="sr-only">0</span>
       </section>
