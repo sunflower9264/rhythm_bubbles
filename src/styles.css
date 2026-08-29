@@ -1784,7 +1784,7 @@ input:focus-visible + i {
 }
 
 .level-toast.is-active {
-  animation: toast-pop 900ms cubic-bezier(.2, .9, .25, 1.2) both;
+  animation: toast-pop 1600ms cubic-bezier(.2, .9, .25, 1.2) both;
 }
 
 .level-toast.is-combat {
@@ -1839,19 +1839,19 @@ input:focus-visible + i {
 
 @keyframes toast-pop {
   0% { opacity: 0; transform: translate(50%, 24px) scale(0.72) rotate(-5deg); visibility: visible; }
-  22%, 68% { opacity: 1; transform: translate(50%, 0) scale(1) rotate(-2deg); visibility: visible; }
+  14%, 82% { opacity: 1; transform: translate(50%, 0) scale(1) rotate(-2deg); visibility: visible; }
   100% { opacity: 0; transform: translate(50%, -18px) scale(0.92) rotate(2deg); visibility: hidden; }
 }
 
 @keyframes combat-toast-pop {
   0% { opacity: 0; transform: translate3d(-50%, 0.8rem, 0) scale(0.72) rotate(-4deg); visibility: visible; }
-  22%, 68% { opacity: 1; transform: translate3d(-50%, 0, 0) scale(1) rotate(-1deg); visibility: visible; }
+  14%, 82% { opacity: 1; transform: translate3d(-50%, 0, 0) scale(1) rotate(-1deg); visibility: visible; }
   100% { opacity: 0; transform: translate3d(-50%, -0.7rem, 0) scale(0.92) rotate(1deg); visibility: hidden; }
 }
 
 @keyframes battle-toast-pop {
   0% { opacity: 0; transform: translate3d(-1rem, 0, 0) scale(0.72) rotate(5deg); visibility: visible; }
-  22%, 68% { opacity: 1; transform: translate3d(0, 0, 0) scale(1) rotate(2deg); visibility: visible; }
+  14%, 82% { opacity: 1; transform: translate3d(0, 0, 0) scale(1) rotate(2deg); visibility: visible; }
   100% { opacity: 0; transform: translate3d(-0.35rem, -0.55rem, 0) scale(0.92) rotate(0); visibility: hidden; }
 }
 

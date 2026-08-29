@@ -2,7 +2,8 @@ export type GameMode = 'classic' | 'memory' | 'sequence';
 
 export type GamePhase = 'menu' | 'preview' | 'playing' | 'paused' | 'transition' | 'reward' | 'game-over' | 'victory';
 
-export type EnemyAttackState = 'charging' | 'windup' | 'recovery' | 'staggered';
+export type EnemyAttackState = 'charging' | 'windup' | 'recovery';
+export type EnemyMechanicState = 'inactive' | 'active' | 'staggered';
 export type EnemyId = 'jelly' | 'angler' | 'hermit' | 'manta' | 'puffer';
 export type EnemyMechanic = 'sequence' | 'capture' | 'shell' | 'sweep' | 'guard';
 
@@ -88,6 +89,7 @@ export interface SessionSnapshot {
   enemyName: string;
   enemyTexture: string;
   enemyMechanic: EnemyMechanic;
+  enemyMechanicState: EnemyMechanicState;
   enemyHp: number;
   maxEnemyHp: number;
   enemyAttack: number;

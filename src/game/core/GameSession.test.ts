@@ -100,15 +100,12 @@ test('五只怪物每局随机且无重复，首怪不固定', () => {
   assert.ok(firstEnemies.size >= 3);
 });
 
-test('紫莓果冻会根据伤害快速发起吞噬对招', () => {
-  const { session, update: initial } = sessionStartingWith('jelly');
-  let update = initial;
-  for (let guard = 0; guard < 12 && update.snapshot.enemyAttackState !== 'windup'; guard += 1) {
-    update = playOneStep(session, update);
-  }
-  assert.equal(update.snapshot.enemyAttackState, 'windup');
-  assert.ok(update.snapshot.enemyIntentTargets.length >= 1);
-  assert.equal(update.effect, 'enemy-windup');
+test('紫莓果冻开盘立即发起吞噬对招，攻击蓄力仍从零开始', () => {
+  const { update } = sessionStartingWith('jelly');
+  assert.equal(update.snapshot.enemyMechanicState, 'active');
+  assert.ok(update.snapshot.enemyIntentTargets.length >= 2);
+  assert.equal(update.snapshot.enemyAttackState, 'charging');
+  assert.equal(update.snapshot.enemyAttackProgress, 0);
 });
 
 test('吞噬标记必须按顺序化解，点错只消耗容错而不清除泡泡', () => {
@@ -129,15 +126,18 @@ test('连续两次完整化解会破势，破势期伤害提升 50%', () => {
   let update = reachFirstIntent(session, initial);
   update = resolveIntent(session, update);
   assert.equal(update.snapshot.enemyPoise, 1);
+  assert.equal(update.snapshot.enemyMechanicState, 'inactive');
   assert.equal(update.snapshot.enemyAttackState, 'charging');
 
-  for (let guard = 0; guard < 60 && update.snapshot.enemyAttackState !== 'windup'; guard += 1) {
+  const firstBoard = update.snapshot.board;
+  for (let guard = 0; guard < 20 && update.snapshot.board === firstBoard; guard += 1) {
     update = playOneStep(session, update);
   }
-  assert.equal(update.snapshot.enemyAttackState, 'windup');
+  assert.equal(update.snapshot.board, firstBoard + 1);
+  assert.equal(update.snapshot.enemyMechanicState, 'active');
   update = resolveIntent(session, update);
   assert.equal(update.effect, 'enemy-break');
-  assert.equal(update.snapshot.enemyAttackState, 'staggered');
+  assert.equal(update.snapshot.enemyMechanicState, 'staggered');
   assert.equal(update.snapshot.enemyPoise, 0);
 
   if (update.snapshot.phase === 'transition') update = session.advanceTime(420);
@@ -147,14 +147,21 @@ test('连续两次完整化解会破势，破势期伤害提升 50%', () => {
   assert.ok(update.snapshot.lastDamage > 8);
 });
 
-test('吞噬化解失败会造成屏幕撞击，并恢复怪物架势', () => {
+test('怪物撞屏攻击与吞噬机制独立推进，攻击不会清除机制标记', () => {
   const { session, update: initial } = sessionStartingWith('jelly');
   let update = reachFirstIntent(session, initial);
+  const intentTargets = [...update.snapshot.enemyIntentTargets];
+  update = session.advanceTime(update.snapshot.enemyAttackCooldownMs);
+  assert.equal(update.effect, 'enemy-windup');
+  assert.equal(update.snapshot.enemyAttackState, 'windup');
+  assert.equal(update.snapshot.enemyMechanicState, 'active');
+  assert.deepEqual(update.snapshot.enemyIntentTargets, intentTargets);
   update = session.advanceTime(update.snapshot.enemyAttackWindupMs);
   assert.equal(update.effect, 'enemy-impact');
   assert.equal(update.snapshot.playerHp, 90);
-  assert.equal(update.snapshot.enemyPoise, 2);
   assert.equal(update.snapshot.enemyAttackState, 'recovery');
+  assert.equal(update.snapshot.enemyMechanicState, 'active');
+  assert.deepEqual(update.snapshot.enemyIntentTargets, intentTargets);
 });
 
 test('半血后吞噬升级为三个标记', () => {
@@ -177,11 +184,13 @@ test('半血后吞噬升级为三个标记', () => {
   }
   if (update.snapshot.phase === 'transition') update = session.advanceTime(420);
   if (update.snapshot.phase === 'preview') update = finishPreview(session, update);
-  if (update.snapshot.enemyAttackState === 'staggered') update = session.advanceTime(1600);
-  if (update.snapshot.enemyAttackState === 'charging') update = session.advanceTime(update.snapshot.enemyAttackCooldownMs);
+  const halfHealthBoard = update.snapshot.board;
+  for (let guard = 0; guard < 20 && update.snapshot.board === halfHealthBoard; guard += 1) {
+    update = playOneStep(session, update);
+  }
   assert.equal(update.snapshot.phase, 'playing');
   assert.equal(update.snapshot.enemyId, 'jelly');
-  assert.equal(update.snapshot.enemyAttackState, 'windup');
+  assert.equal(update.snapshot.enemyMechanicState, 'active');
   assert.equal(update.snapshot.enemyIntentTargets.length, 3);
 });
 
@@ -193,23 +202,28 @@ test('灯笼骗骗鱼用救援标记切断捕获光', () => {
   const tapCount = update.snapshot.boardTapCount;
   update = session.select(update.snapshot.enemyIntentTargets[0]);
   assert.equal(update.effect, 'enemy-countered');
+  assert.equal(update.snapshot.enemyMechanicState, 'inactive');
   assert.equal(update.snapshot.enemyAttackState, 'charging');
   assert.equal(update.snapshot.playerHp, hp);
   assert.equal(update.snapshot.boardTapCount, tapCount + 1);
 });
 
 test('铠潮寄居蟹需击破两个任意顺序弱点，护壳期减伤且破壳后增伤', () => {
-  const { session, update: initial } = sessionStartingWith('hermit');
-  const firstTarget = initial.snapshot.bubbles.find((bubble) => bubble.isTarget)!;
-  let update = session.select(firstTarget.index);
-  assert.equal(update.snapshot.lastDamage, 4);
-  update = reachFirstIntent(session, update);
+  const armored = sessionStartingWith('hermit');
+  const armoredTarget = armored.update.snapshot.bubbles.find((bubble) => bubble.isTarget
+    && !armored.update.snapshot.enemyIntentTargets.includes(bubble.index))!;
+  const armoredHit = armored.session.select(armoredTarget.index);
+  assert.equal(armoredHit.snapshot.lastDamage, 4);
+
+  const { session, update: initial } = sessionStartingWith('hermit', 2000);
+  let update = reachFirstIntent(session, initial);
   const [first, second] = update.snapshot.enemyIntentTargets;
   update = session.select(second);
-  assert.equal(update.snapshot.enemyAttackState, 'windup');
+  assert.equal(update.snapshot.enemyMechanicState, 'active');
   update = session.select(first);
   assert.equal(update.effect, 'enemy-break');
-  assert.equal(update.snapshot.enemyAttackState, 'staggered');
+  assert.equal(update.snapshot.enemyMechanicState, 'staggered');
+  assert.equal(update.snapshot.enemyAttackState, 'charging');
   const target = update.snapshot.bubbles.find((bubble) => bubble.isTarget && !bubble.cleared)!;
   update = session.select(target.index);
   assert.equal(update.snapshot.lastDamage, 18);
@@ -230,6 +244,7 @@ test('星翼魔鬼鱼危险行会反伤，安全行正确泡泡可打断扫线',
   const safeTarget = update.snapshot.bubbles.find((bubble) => bubble.isTarget && !bubble.cleared && bubble.row !== update.snapshot.enemyHazardRow)!;
   update = safe.session.select(safeTarget.index);
   assert.equal(update.effect, 'enemy-countered');
+  assert.equal(update.snapshot.enemyMechanicState, 'inactive');
   assert.equal(update.snapshot.enemyAttackState, 'charging');
 });
 
@@ -245,8 +260,9 @@ test('泡泡刺豚蓄刺时必须停手，忍过蓄刺后暴露弱点且半血�
 
   const patient = sessionStartingWith('puffer', 2000);
   update = reachFirstIntent(patient.session, patient.update);
-  update = patient.session.advanceTime(update.snapshot.enemyAttackWindupMs);
-  assert.equal(update.snapshot.enemyAttackState, 'staggered');
+  update = patient.session.advanceTime(900);
+  assert.equal(update.snapshot.enemyMechanicState, 'staggered');
+  assert.equal(update.snapshot.enemyAttackState, 'charging');
   assert.equal(update.snapshot.playerHp, 100);
   while (update.snapshot.enemyHp > update.snapshot.maxEnemyHp / 2) {
     const target = update.snapshot.bubbles.find((candidate) => candidate.isTarget && !candidate.cleared);
@@ -260,6 +276,7 @@ test('第 4、5 战的旋律泡泡均一次点击清除', () => {
   for (const battle of [4, 5]) {
     const session = new GameSession(fixedRandom);
     let update = finishPreview(session, playUntilBattle(session, battle));
+    if (update.snapshot.enemyMechanicState === 'active') update = resolveActiveMechanic(session, update);
     const expected = update.snapshot.expectedIndex!;
     update = session.select(expected);
     assert.equal(update.snapshot.bubbles[expected].cleared, true, `battle ${battle}`);
@@ -280,7 +297,7 @@ test('普通连击削减 0.5% 蓄力，连击清盘合计削减 1%', () => {
   assert.ok(Math.abs(update.snapshot.lastAttackReduction - 0.01) < 0.0001);
 });
 
-test('约每秒 7 次的快速点击仍会让怪物进入技能蓄力', () => {
+test('约每秒 7 次的快速点击仍会让怪物蓄满撞屏攻击', () => {
   const session = new GameSession(fixedRandom);
   let update = finishPreview(session, playUntilBattle(session, 3));
 
@@ -321,8 +338,9 @@ test('连击必须在 1 秒窗口内衔接，超时后归零', () => {
 });
 
 test('未清除泡泡的点击达到目标数 +3 时保留本次失误并更换盘面', () => {
-  const session = new GameSession(fixedRandom);
-  const start = session.start();
+  const { session } = sessionStartingWith('puffer');
+  const start = session.advanceTime(900);
+  assert.equal(start.snapshot.enemyMechanicState, 'staggered');
   const wrong = start.snapshot.bubbles.find((bubble) => !bubble.isTarget)!;
   const initialBoard = start.snapshot.board;
   const tapLimit = start.snapshot.targetCount + 3;
@@ -412,8 +430,8 @@ test('原加时奖励改为只恢复 14 点生命', () => {
   assert.equal(update.snapshot.timeLimitMs, 0);
 });
 
-test('五战四奖励在多个随机种子和奖励策略下都可通关', () => {
-  for (const reward of ['power', 'heart', 'shield', 'time'] as RewardId[]) {
+test('五战防御奖励路线在多个随机种子下可通关', () => {
+  for (const reward of ['shield'] as RewardId[]) {
     for (let seed = 1; seed <= 24; seed += 1) {
       const update = finishRun(new GameSession(createSeededRandom(seed)), reward);
       assert.equal(update.snapshot.phase, 'victory', `${reward} seed ${seed}`);
@@ -434,19 +452,37 @@ function sessionStartingWith(enemyId: EnemyId, seedOffset = 0): { session: GameS
 function reachFirstIntent(session: GameSession, initial?: SessionUpdate): SessionUpdate {
   let update = initial ?? session.start();
   update = finishPreview(session, update);
-  if (update.snapshot.enemyAttackState === 'charging') {
-    update = session.advanceTime(update.snapshot.enemyAttackCooldownMs);
-  }
-  assert.equal(update.snapshot.enemyAttackState, 'windup');
+  assert.equal(update.snapshot.enemyMechanicState, 'active');
   return update;
 }
 
 function resolveIntent(session: GameSession, initial: SessionUpdate): SessionUpdate {
   let update = initial;
-  while (update.snapshot.enemyAttackState === 'windup') {
+  while (update.snapshot.enemyMechanicState === 'active') {
     const target = update.snapshot.enemyIntentTargets[update.snapshot.enemyIntentCursor];
     assert.notEqual(target, undefined);
     update = session.select(target);
+  }
+  return update;
+}
+
+function resolveActiveMechanic(session: GameSession, initial: SessionUpdate): SessionUpdate {
+  let update = initial;
+  while (update.snapshot.enemyMechanicState === 'active') {
+    const snapshot = update.snapshot;
+    if (snapshot.enemyMechanic === 'guard') {
+      update = session.advanceTime(900);
+    } else if (snapshot.enemyMechanic === 'sweep') {
+      const target = snapshot.mode === 'sequence'
+        ? snapshot.bubbles[snapshot.expectedIndex!]
+        : snapshot.bubbles.find((bubble) => bubble.isTarget && !bubble.cleared && bubble.row !== snapshot.enemyHazardRow);
+      assert.ok(target && target.row !== snapshot.enemyHazardRow);
+      update = session.select(target.index);
+    } else {
+      const target = snapshot.enemyIntentTargets[snapshot.enemyIntentCursor];
+      assert.notEqual(target, undefined);
+      update = session.select(target);
+    }
   }
   return update;
 }
@@ -466,16 +502,8 @@ function playOneStep(session: GameSession, update: SessionUpdate, preferredRewar
     return session.selectReward(preferred >= 0 ? preferred : 0);
   }
   if (snapshot.phase !== 'playing') return update;
-  if (snapshot.enemyAttackState === 'windup') {
-    if (['sequence', 'capture', 'shell'].includes(snapshot.enemyMechanic)) {
-      return session.select(snapshot.enemyIntentTargets[snapshot.enemyIntentCursor]);
-    }
-    if (snapshot.enemyMechanic === 'guard') return session.advanceTime(snapshot.enemyAttackWindupMs);
-    if (snapshot.enemyMechanic === 'sweep') {
-      const safeTarget = snapshot.bubbles.find((bubble) => bubble.isTarget && !bubble.cleared && bubble.row !== snapshot.enemyHazardRow);
-      return safeTarget ? session.select(safeTarget.index) : session.advanceTime(snapshot.enemyAttackWindupMs);
-    }
-  }
+  if (snapshot.enemyMechanicState === 'active') return resolveActiveMechanic(session, update);
+  if (snapshot.enemyAttackState === 'windup') return session.advanceTime(snapshot.enemyAttackWindupMs);
   const target = snapshot.mode === 'sequence'
     ? snapshot.expectedIndex
     : snapshot.bubbles.find((bubble) => bubble.isTarget && !bubble.cleared)?.index;

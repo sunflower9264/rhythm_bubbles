@@ -341,7 +341,10 @@ export class BubbleScene extends Phaser.Scene {
         this.animateShieldImpact(this.latestSnapshot.lastBlockedDamage, this.latestSnapshot.shield === 0);
       }
     }
-    if (effect === 'enemy-recover') this.restoreEnemyPose();
+    if (effect === 'enemy-recover') {
+      if (this.latestSnapshot.enemyAttackState === 'windup') this.setEnemyWindupPose();
+      else this.restoreEnemyPose();
+    }
 
     if (['mistake', 'mistake-overflow', 'counter-miss'].includes(effect)) {
       if (this.latestSnapshot.lastBlockedDamage > 0) {
@@ -414,7 +417,7 @@ export class BubbleScene extends Phaser.Scene {
   private drawIntentLinks(snapshot: SessionSnapshot): void {
     this.intentLinks.clear();
     this.renderedIntentLinkCount = 0;
-    if (snapshot.enemyAttackState !== 'windup') return;
+    if (snapshot.enemyMechanicState !== 'active') return;
 
     if (snapshot.enemyMechanic === 'sweep' && snapshot.enemyHazardRow !== null) {
       const innerSize = BOARD_PLAY_SIZE;
@@ -910,7 +913,7 @@ export class BubbleScene extends Phaser.Scene {
       scale: 1,
       duration: 180,
       ease: 'Back.Out',
-      onComplete: () => this.destroyAfterTween(text, { y: y + 28, alpha: 0, duration: 250, delay: 90, ease: 'Cubic.In' }),
+      onComplete: () => this.destroyAfterTween(text, { y: y + 28, alpha: 0, duration: 280, delay: 360, ease: 'Cubic.In' }),
     });
   }
 

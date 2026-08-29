@@ -158,30 +158,17 @@ export class AppUI {
 
     const attackIntent = this.get('#enemy-attack-intent');
     const attackFrozen = ['preview', 'paused', 'reward', 'transition'].includes(snapshot.phase);
-    const mechanicLabel = {
-      sequence: snapshot.enemyAttackState === 'windup'
-        ? `吞噬对招 ${snapshot.enemyIntentCursor}/${snapshot.enemyIntentTargets.length}`
-        : snapshot.enemyAttackState === 'recovery' ? '吞噬落空' : '吞噬蓄势',
-      capture: snapshot.enemyAttackState === 'windup' ? '诱灯捕获' : '诱灯蓄能',
-      shell: snapshot.enemyAttackState === 'windup'
-        ? `护壳弱点 ${snapshot.enemyIntentCursor}/${snapshot.enemyIntentTargets.length}`
-        : '护壳冲撞',
-      sweep: snapshot.enemyAttackState === 'windup' && snapshot.enemyHazardRow !== null
-        ? `第 ${snapshot.enemyHazardRow + 1} 排潮汐扫线`
-        : '潮汐蓄势',
-      guard: snapshot.enemyAttackState === 'windup' ? '尖刺反击' : '鼓气蓄刺',
-    }[snapshot.enemyMechanic];
     const attackLabel = snapshot.enemyHp === 0
       ? '攻击已停止'
-      : snapshot.enemyAttackState === 'staggered'
-        ? `破势！伤害 ×${snapshot.enemyMechanic === 'shell' ? '1.75' : '1.5'}`
+      : snapshot.enemyAttackState === 'windup'
+        ? '撞击警告'
         : snapshot.enemyAttackState === 'recovery'
-          ? '攻击落空'
-          : attackFrozen ? '攻击暂停' : mechanicLabel;
+          ? '撞击恢复'
+          : attackFrozen ? '攻击暂停' : '撞击蓄力';
     this.text('#enemy-attack-label', attackLabel);
     attackIntent.style.setProperty('--attack-progress', `${snapshot.enemyAttackProgress * 100}%`);
     attackIntent.classList.toggle('is-windup', snapshot.enemyAttackState === 'windup');
-    attackIntent.classList.toggle('is-staggered', snapshot.enemyAttackState === 'staggered');
+    attackIntent.classList.remove('is-staggered');
     attackIntent.classList.toggle('is-frozen', attackFrozen);
     attackIntent.classList.toggle('is-broken', snapshot.enemyHp === 0);
 
@@ -215,7 +202,7 @@ export class AppUI {
     }
     if (update.effect === 'mistake') this.announce(`点错泡泡，损失 ${snapshot.lastEnemyDamage} 点生命`);
     if (update.effect === 'counter-miss') this.announce(`机制应对失败，损失 ${snapshot.lastEnemyDamage} 点生命`);
-    if (update.effect === 'enemy-countered' && snapshot.enemyAttackState === 'charging') {
+    if (update.effect === 'enemy-countered') {
       this.flashToast(snapshot.enemyMechanic === 'capture' || snapshot.enemyMechanic === 'sweep'
         ? '反制成功！'
         : `化解成功 · 架势 ${snapshot.enemyPoise}/${snapshot.maxEnemyPoise}`, 'combat');
@@ -225,7 +212,17 @@ export class AppUI {
       this.flashToast('失误超限 · 更换泡泡', 'combat');
       this.announce('失误超过三次，正在生成新一轮泡泡');
     }
-    if (update.effect === 'reward-picked') this.flashToast(snapshot.enemyIsBoss ? 'Boss 战' : `第 ${snapshot.battle} 战`, 'battle');
+    const mechanicAnnouncement = {
+      sequence: '吞噬对招 · 按序化解',
+      capture: '诱灯捕获 · 点击救援泡泡',
+      shell: '护壳弱点 · 击破两处',
+      sweep: `潮汐扫线 · 避开第 ${(snapshot.enemyHazardRow ?? 0) + 1} 排`,
+      guard: '尖刺反击 · 暂停点击',
+    }[snapshot.enemyMechanic];
+    if (['start', 'next-round'].includes(update.effect)) this.flashToast(mechanicAnnouncement, 'combat');
+    if (update.effect === 'reward-picked') {
+      this.flashToast(`${snapshot.enemyIsBoss ? 'Boss 战' : `第 ${snapshot.battle} 战`} · ${mechanicAnnouncement}`, 'battle');
+    }
     if (update.effect === 'start') this.announce(`${snapshot.mode ? MODE_LABEL[snapshot.mode] : ''}开始`);
     if (['mistake', 'counter-miss', 'enemy-impact', 'timeout-impact'].includes(update.effect) && snapshot.phase === 'game-over') this.announce('挑战失败');
     if (update.effect === 'victory') this.announce('挑战成功');
@@ -336,7 +333,7 @@ export class AppUI {
     impact.textContent = message;
     impact.classList.remove('is-visible');
     requestAnimationFrame(() => impact.classList.add('is-visible'));
-    this.comboImpactTimer = window.setTimeout(() => impact.classList.remove('is-visible'), 720);
+    this.comboImpactTimer = window.setTimeout(() => impact.classList.remove('is-visible'), 1200);
   }
 
   private clearComboImpact(): void {

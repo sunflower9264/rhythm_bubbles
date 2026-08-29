@@ -103,6 +103,7 @@ window.render_game_to_text = () => {
         name: snapshot.enemyName,
         texture: snapshot.enemyTexture,
         mechanic: snapshot.enemyMechanic,
+        mechanicState: snapshot.enemyMechanicState,
         hp: snapshot.enemyHp,
         maxHp: snapshot.maxEnemyHp,
         attack: snapshot.enemyAttack,

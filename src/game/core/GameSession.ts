@@ -1,10 +1,11 @@
 import { BATTLE_STATS, createEnemyOrder, ENEMY_ARCHETYPES, getEnemyArchetype } from './enemies';
 import { createBubbles, createLevelConfig, createSeededRandom, type RandomSource } from './level';
-import type { BubbleState, EnemyAttackState, EnemyId, GameMode, GamePhase, RewardChoice, RewardId, SessionSnapshot, SessionUpdate } from './types';
+import type { BubbleState, EnemyAttackState, EnemyId, EnemyMechanicState, GameMode, GamePhase, RewardChoice, RewardId, SessionSnapshot, SessionUpdate } from './types';
 
 const NEXT_BOARD_MS = 420;
 const RESULT_TRANSITION_MS = 800;
 const ENEMY_RECOVERY_MS = 320;
+const GUARD_ACTIVE_MS = 900;
 const MISTAKE_LIMIT = 3;
 const COMBO_ATTACK_REDUCTION = 0.005;
 const BOARD_CLEAR_ATTACK_REDUCTION = 0.005;
@@ -55,6 +56,8 @@ export class GameSession {
   private mistakeCount = 0;
   private enemyAttackState: EnemyAttackState = 'charging';
   private enemyAttackElapsedMs = 0;
+  private enemyMechanicState: EnemyMechanicState = 'inactive';
+  private enemyMechanicElapsedMs = 0;
   private enemyIntentTargets: number[] = [];
   private enemyIntentCursor = 0;
   private enemyPoise = 2;
@@ -136,20 +139,19 @@ export class GameSession {
     const enemy = this.currentEnemy();
     const mechanic = enemy.mechanic;
     const intentIndex = this.getExpectedIntentIndex();
-    if (this.enemyAttackState === 'windup' && mechanic === 'guard') {
+    if (this.enemyMechanicState === 'active' && mechanic === 'guard') {
       this.resetCombo();
       this.applyPlayerDamage(Math.ceil(enemy.attack * 0.6));
-      this.enemyAttackState = 'recovery';
-      this.enemyAttackElapsedMs = 0;
+      this.resetEnemyMechanic();
       if (this.playerHp === 0) this.phase = 'game-over';
       return this.finishBubbleTap('counter-miss', index);
     }
-    if (this.enemyAttackState === 'windup' && mechanic === 'capture' && index === intentIndex) {
+    if (this.enemyMechanicState === 'active' && mechanic === 'capture' && index === intentIndex) {
       this.performCounterHit();
-      this.resetEnemyAttack();
+      this.resetEnemyMechanic();
       return this.finishBubbleTap('enemy-countered', index);
     }
-    if (this.enemyAttackState === 'windup' && mechanic === 'shell'
+    if (this.enemyMechanicState === 'active' && mechanic === 'shell'
       && this.enemyIntentTargets.slice(this.enemyIntentCursor).includes(index)) {
       const selectedPosition = this.enemyIntentTargets.indexOf(index, this.enemyIntentCursor);
       [this.enemyIntentTargets[this.enemyIntentCursor], this.enemyIntentTargets[selectedPosition]] = [
@@ -162,14 +164,14 @@ export class GameSession {
       this.enemyIntentTargets = [];
       this.enemyIntentCursor = 0;
       this.enemyPoise = 0;
-      if (this.enemyHp === 0) this.resetEnemyAttack();
+      if (this.enemyHp === 0) this.resetEnemyMechanic();
       else {
-        this.enemyAttackState = 'staggered';
-        this.enemyAttackElapsedMs = 0;
+        this.enemyMechanicState = 'staggered';
+        this.enemyMechanicElapsedMs = 0;
       }
       return this.finishBubbleTap('enemy-break', index);
     }
-    if (this.enemyAttackState === 'windup' && mechanic === 'sequence' && index === intentIndex) {
+    if (this.enemyMechanicState === 'active' && mechanic === 'sequence' && index === intentIndex) {
       this.performCounterHit();
       this.enemyIntentCursor += 1;
       if (this.enemyIntentCursor < this.enemyIntentTargets.length) return this.finishBubbleTap('enemy-countered', index);
@@ -177,18 +179,17 @@ export class GameSession {
       this.enemyPoise = Math.max(0, this.enemyPoise - 1);
       this.enemyIntentTargets = [];
       this.enemyIntentCursor = 0;
-      if (this.enemyHp === 0) this.resetEnemyAttack();
+      if (this.enemyHp === 0) this.resetEnemyMechanic();
       else if (this.enemyPoise === 0) {
-        this.enemyAttackState = 'staggered';
-        this.enemyAttackElapsedMs = 0;
+        this.enemyMechanicState = 'staggered';
+        this.enemyMechanicElapsedMs = 0;
         return this.finishBubbleTap('enemy-break', index);
       } else {
-        this.enemyAttackState = 'charging';
-        this.enemyAttackElapsedMs = 0;
+        this.resetEnemyMechanic();
       }
       return this.finishBubbleTap('enemy-countered', index);
     }
-    if (this.enemyAttackState === 'windup' && mechanic === 'sequence'
+    if (this.enemyMechanicState === 'active' && mechanic === 'sequence'
       && this.enemyIntentTargets.includes(index) && index !== intentIndex) {
       this.resetCombo();
       this.mistakeCount += 1;
@@ -196,14 +197,12 @@ export class GameSession {
       if (this.playerHp === 0) this.phase = 'game-over';
       return this.finishBubbleTap('counter-miss', index);
     }
-    if (this.enemyAttackState === 'windup' && mechanic === 'sweep'
+    if (this.enemyMechanicState === 'active' && mechanic === 'sweep'
       && bubble.row === this.enemyHazardRow) {
       this.resetCombo();
       this.mistakeCount += 1;
       this.applyPlayerDamage(Math.ceil(enemy.attack * 0.6));
-      this.enemyAttackState = 'recovery';
-      this.enemyAttackElapsedMs = 0;
-      this.enemyHazardRow = null;
+      this.resetEnemyMechanic();
       if (this.playerHp === 0) this.phase = 'game-over';
       return this.finishBubbleTap('counter-miss', index);
     }
@@ -225,8 +224,8 @@ export class GameSession {
     this.score += 10;
     this.combo += 1;
     this.comboElapsedMs = 0;
-    const staggerMultiplier = this.enemyAttackState === 'staggered' ? (mechanic === 'shell' ? 1.75 : 1.5) : 1;
-    const armorMultiplier = mechanic === 'shell' && this.enemyAttackState !== 'staggered' ? 0.5 : 1;
+    const staggerMultiplier = this.enemyMechanicState === 'staggered' ? (mechanic === 'shell' ? 1.75 : 1.5) : 1;
+    const armorMultiplier = mechanic === 'shell' && this.enemyMechanicState !== 'staggered' ? 0.5 : 1;
     this.lastDamage = Math.max(1, Math.round(
       (this.attackPower + Math.min(3, this.combo - 1)) * staggerMultiplier * armorMultiplier,
     ));
@@ -234,28 +233,16 @@ export class GameSession {
     if (this.mode === 'sequence' && bubble.cleared) this.sequenceCursor += 1;
 
     let counterEffect: SessionUpdate['effect'] | null = null;
-    if (this.enemyHp === 0) this.resetEnemyAttack();
+    if (this.enemyHp === 0) {
+      this.resetEnemyAttack();
+      this.resetEnemyMechanic();
+    }
     else {
-      const reduction = mechanic === 'sequence' ? 0 : (this.combo > 1 ? COMBO_ATTACK_REDUCTION : 0)
+      const reduction = (this.combo > 1 ? COMBO_ATTACK_REDUCTION : 0)
         + (this.getRemainingTargets() === 0 ? BOARD_CLEAR_ATTACK_REDUCTION : 0);
       this.lastAttackReduction = this.weakenEnemyAttack(reduction);
-      if (mechanic === 'sequence' && counterEffect === null
-        && this.enemyAttackState === 'charging' && this.getRemainingTargets() > 0) {
-        this.enemyAttackElapsedMs = Math.min(this.currentEnemy().cooldownMs, this.enemyAttackElapsedMs + this.currentEnemy().cooldownMs * 0.55);
-        if (this.enemyAttackElapsedMs >= this.currentEnemy().cooldownMs) counterEffect = this.startEnemySpecial();
-      }
-      if (mechanic === 'sequence' && this.enemyAttackState === 'windup' && this.getRemainingTargets() === 0) {
-        this.enemyPoise = Math.max(0, this.enemyPoise - 1);
-        this.enemyIntentTargets = [];
-        this.enemyIntentCursor = 0;
-        this.enemyAttackElapsedMs = 0;
-        this.enemyAttackState = this.enemyPoise === 0 ? 'staggered' : 'charging';
-        counterEffect = this.enemyPoise === 0 ? 'enemy-break' : 'enemy-countered';
-      }
-      if (mechanic === 'sweep' && this.enemyAttackState === 'windup') {
-        this.enemyAttackState = 'charging';
-        this.enemyAttackElapsedMs = 0;
-        this.enemyHazardRow = null;
+      if (mechanic === 'sweep' && this.enemyMechanicState === 'active') {
+        this.resetEnemyMechanic();
         counterEffect = 'enemy-countered';
       }
     }
@@ -295,6 +282,8 @@ export class GameSession {
           if (this.comboElapsedMs >= COMBO_WINDOW_MS) this.resetCombo();
         }
 
+        const mechanicEffect = this.advanceEnemyMechanic(step);
+        if (mechanicEffect !== 'none') effect = mechanicEffect;
         const attackEffect = this.advanceEnemyAttack(step);
         if (attackEffect !== 'none') effect = attackEffect;
         if (this.playerHp === 0) break;
@@ -358,6 +347,7 @@ export class GameSession {
       maxEnemyHp: enemy.maxHp,
       enemyAttack: enemy.attack,
       enemyAttackState: this.enemyAttackState,
+      enemyMechanicState: this.enemyMechanicState,
       enemyAttackProgress: this.getEnemyAttackProgress(),
       enemyAttackCooldownMs: enemy.cooldownMs,
       enemyAttackWindupMs: enemy.windupMs,
@@ -399,6 +389,7 @@ export class GameSession {
     this.enemyPoise = ['sequence', 'shell'].includes(enemy.mechanic) ? 2 : 1;
     this.enemyIntentTargets = [];
     this.enemyIntentCursor = 0;
+    this.resetEnemyMechanic();
     this.resetEnemyAttack();
     this.loadBoard();
   }
@@ -419,10 +410,11 @@ export class GameSession {
     this.mistakeCount = 0;
     this.lastAttackReduction = 0;
     this.phase = this.mode === 'classic' ? 'playing' : 'preview';
+    this.activateEnemyMechanic();
   }
 
   private beginTransition(target: TransitionTarget): void {
-    if (target === 'next-board' && this.enemyAttackState === 'windup') this.resetEnemyAttack();
+    this.resetEnemyMechanic();
     this.phase = 'transition';
     this.transitionTarget = target;
     this.transitionElapsedMs = 0;
@@ -446,22 +438,15 @@ export class GameSession {
     this.enemyAttackElapsedMs += milliseconds;
 
     if (this.enemyAttackState === 'charging' && this.enemyAttackElapsedMs >= enemy.cooldownMs) {
-      return this.startEnemySpecial() ?? 'none';
+      this.enemyAttackState = 'windup';
+      this.enemyAttackElapsedMs = 0;
+      return 'enemy-windup';
     }
 
     if (this.enemyAttackState === 'windup' && this.enemyAttackElapsedMs >= enemy.windupMs) {
-      if (enemy.mechanic === 'guard') {
-        this.enemyAttackState = 'staggered';
-        this.enemyAttackElapsedMs = 0;
-        return 'enemy-break';
-      }
       this.applyPlayerDamage(enemy.attack);
       this.enemyAttackState = 'recovery';
       this.enemyAttackElapsedMs = 0;
-      this.enemyIntentTargets = [];
-      this.enemyIntentCursor = 0;
-      this.enemyHazardRow = null;
-      if (['sequence', 'shell'].includes(enemy.mechanic)) this.enemyPoise = 2;
       if (this.playerHp === 0) this.phase = 'game-over';
       return 'enemy-impact';
     }
@@ -472,12 +457,33 @@ export class GameSession {
       return 'enemy-recover';
     }
 
-    if (this.enemyAttackState === 'staggered') {
-      const staggerMs = enemy.mechanic === 'guard' ? 1200 : enemy.mechanic === 'shell' ? 1400 : 1600;
-      if (this.enemyAttackElapsedMs >= staggerMs) {
-        this.enemyPoise = ['sequence', 'shell'].includes(enemy.mechanic) ? 2 : 1;
-        this.enemyAttackState = 'charging';
-        this.enemyAttackElapsedMs = 0;
+    return 'none';
+  }
+
+  private resetEnemyAttack(): void {
+    this.enemyAttackState = 'charging';
+    this.enemyAttackElapsedMs = 0;
+  }
+
+  private advanceEnemyMechanic(milliseconds: number): SessionUpdate['effect'] {
+    if (this.enemyHp === 0) return 'none';
+    const mechanic = this.currentEnemy().mechanic;
+    this.enemyMechanicElapsedMs += milliseconds;
+
+    if (mechanic === 'guard' && this.enemyMechanicState === 'active'
+      && this.enemyMechanicElapsedMs >= GUARD_ACTIVE_MS) {
+      this.enemyMechanicState = 'staggered';
+      this.enemyMechanicElapsedMs = 0;
+      this.enemyPoise = 0;
+      return 'enemy-break';
+    }
+
+    if (this.enemyMechanicState === 'staggered') {
+      const staggerMs = mechanic === 'guard' ? 1200 : mechanic === 'shell' ? 1400 : 1600;
+      if (this.enemyMechanicElapsedMs >= staggerMs) {
+        this.enemyPoise = ['sequence', 'shell'].includes(mechanic) ? 2 : 1;
+        this.enemyMechanicState = 'inactive';
+        this.enemyMechanicElapsedMs = 0;
         return 'enemy-recover';
       }
     }
@@ -485,9 +491,9 @@ export class GameSession {
     return 'none';
   }
 
-  private resetEnemyAttack(): void {
-    this.enemyAttackState = 'charging';
-    this.enemyAttackElapsedMs = 0;
+  private resetEnemyMechanic(): void {
+    this.enemyMechanicState = 'inactive';
+    this.enemyMechanicElapsedMs = 0;
     this.enemyIntentTargets = [];
     this.enemyIntentCursor = 0;
     this.enemyHazardRow = null;
@@ -522,7 +528,6 @@ export class GameSession {
     const enemy = this.currentEnemy();
     if (this.enemyAttackState === 'windup') return 1;
     if (this.enemyAttackState === 'recovery') return 0;
-    if (this.enemyAttackState === 'staggered') return Math.max(0, 1 - this.enemyAttackElapsedMs / 1600);
     return Math.min(1, this.enemyAttackElapsedMs / enemy.cooldownMs);
   }
 
@@ -568,7 +573,7 @@ export class GameSession {
   }
 
   private getExpectedIntentIndex(): number | null {
-    return this.enemyAttackState === 'windup' ? this.enemyIntentTargets[this.enemyIntentCursor] ?? null : null;
+    return this.enemyMechanicState === 'active' ? this.enemyIntentTargets[this.enemyIntentCursor] ?? null : null;
   }
 
   private getBoardTapLimit(): number {
@@ -582,10 +587,10 @@ export class GameSession {
     return this.update(effect, index);
   }
 
-  private startEnemySpecial(): SessionUpdate['effect'] | null {
+  private activateEnemyMechanic(): void {
     const enemy = this.currentEnemy();
     const available = this.bubbles.filter((bubble) => !bubble.cleared).map((bubble) => bubble.index);
-    if (available.length === 0) return null;
+    if (available.length === 0) return;
     this.enemyIntentTargets = [];
     this.enemyIntentCursor = 0;
     this.enemyHazardRow = null;
@@ -602,14 +607,17 @@ export class GameSession {
       this.enemyPoise = this.enemyIntentTargets.length;
     } else if (enemy.mechanic === 'sweep') {
       const remainingTargets = this.bubbles.filter((bubble) => bubble.isTarget && !bubble.cleared);
+      const expectedTarget = this.mode === 'sequence'
+        ? remainingTargets.find((bubble) => bubble.index === this.getExpectedIndex())
+        : null;
       const rowOffset = (this.board + this.battle) % Math.max(1, this.currentConfig()?.rows ?? 1);
       const rows = Array.from({ length: this.currentConfig()?.rows ?? 1 }, (_, index) => (rowOffset + index) % (this.currentConfig()?.rows ?? 1));
-      this.enemyHazardRow = rows.find((row) => remainingTargets.some((bubble) => bubble.row !== row)) ?? rows[0] ?? 0;
+      this.enemyHazardRow = rows.find((row) => row !== expectedTarget?.row
+        && remainingTargets.some((bubble) => bubble.row !== row)) ?? rows[0] ?? 0;
     }
 
-    this.enemyAttackState = 'windup';
-    this.enemyAttackElapsedMs = 0;
-    return 'enemy-windup';
+    this.enemyMechanicState = 'active';
+    this.enemyMechanicElapsedMs = 0;
   }
 
   private performCounterHit(): void {

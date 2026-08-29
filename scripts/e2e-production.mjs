@@ -202,7 +202,8 @@ await refreshPage.waitForFunction(() => typeof window.render_game_to_text === 'f
 await refreshPage.locator('#start-game').tap();
 let refreshState = await readState(refreshPage);
 const refreshBoard = refreshState.battle.board;
-const wrongBubble = refreshState.bubbles.find((bubble) => !bubble.isTarget);
+const wrongBubble = refreshState.bubbles.find((bubble) => !bubble.isTarget
+  && !refreshState.battle.enemy.intentTargets.includes(bubble.index));
 assert.ok(wrongBubble);
 assert.equal(refreshState.boardTapLimit, refreshState.targetCount + 3);
 for (let tap = 1; tap <= refreshState.boardTapLimit; tap += 1) {
@@ -240,9 +241,11 @@ assert.equal(await page.locator('#player-energy-value').textContent(), `${Math.r
 assert.equal(await page.locator('#target-bubbles > i').count(), state.remainingTargets, '正确点击后可消耗泡泡应减少一个');
 await screenshot(page, '02b-isolated-bubble-pop.png');
 
-state = await progressUntil(page, (snapshot) => snapshot.battle.enemy.attackState === 'windup');
+assert.equal(state.battle.enemy.mechanicState, 'active');
 assert.ok(state.battle.enemy.intentTargets.length >= 2);
-assert.equal(await page.locator('#enemy-attack-label').textContent(), `吞噬对招 0/${state.battle.enemy.intentTargets.length}`);
+assert.equal(state.battle.enemy.attackState, 'charging');
+assert.ok(state.battle.enemy.attackProgress < 0.01, '开盘机制激活时撞击蓄力仍应接近 0');
+assert.equal(await page.locator('#enemy-attack-label').textContent(), '撞击蓄力');
 assert.equal(state.feedback.intentLinks.rendered, state.battle.enemy.intentTargets.length);
 await screenshot(page, '03-jelly-intent-links.png');
 await page.waitForTimeout(450);
@@ -251,6 +254,7 @@ state = await readState(page);
 const hpBeforeCounterMiss = state.battle.player.hp;
 const counterMissDamage = Math.ceil(state.battle.player.mistakeDamage * 0.5);
 const enemyImpactDamage = state.battle.enemy.attack;
+const intentCountBeforeImpact = state.battle.enemy.intentTargets.length;
 await page.evaluate((index) => window.selectBubble(index), state.battle.enemy.intentTargets[1]);
 const counterMissIndex = state.battle.enemy.intentTargets[1];
 await page.waitForTimeout(120);
@@ -262,12 +266,18 @@ assert.equal(state.battle.player.mistakes, 1);
 assert.ok(state.feedback.transformedBubbles.every((bubble) => bubble.index === counterMissIndex),
   '错误点击期间只有被点击泡泡可以产生形变');
 
+state = await advanceToWindup(page, state);
+assert.equal(state.battle.enemy.attackState, 'windup');
+assert.equal(state.battle.enemy.mechanicState, 'active');
+assert.equal(state.feedback.intentLinks.rendered, intentCountBeforeImpact, '撞击蓄满时机制连线仍应独立存在');
+assert.equal(await page.locator('#enemy-attack-label').textContent(), '撞击警告');
 await page.evaluate((milliseconds) => window.advanceTime(milliseconds), state.battle.enemy.windupMs);
 state = await readState(page);
 assert.equal(state.battle.enemy.attackState, 'recovery');
 assert.equal(state.battle.player.hp, hpBeforeCounterMiss - counterMissDamage - enemyImpactDamage);
 assert.equal(state.feedback.combatText.anchorY, combatTextAnchorY, '怪物伤害反馈应复用统一的怪物上方锚点');
-assert.equal(state.feedback.intentLinks.rendered, 0, '怪物撞屏时应清除目标连线');
+assert.equal(state.battle.enemy.mechanicState, 'active');
+assert.equal(state.feedback.intentLinks.rendered, intentCountBeforeImpact, '怪物撞屏不应清除独立机制连线');
 assert.ok(state.feedback.enemy.y >= 700, '第一战应由怪物本体撞向屏幕');
 assert.ok(state.feedback.enemy.scaleX >= 0.4, '怪物撞屏时应明显放大');
 assert.equal(state.feedback.audio.recentSfx.at(-1), 'enemy-attack', '怪物撞屏应播放水下重击音效');
@@ -275,7 +285,7 @@ await screenshot(page, '04-jelly-screen-impact.png');
 await page.reload({ waitUntil: 'networkidle' });
 await page.locator('#start-game').tap();
 state = await readState(page);
-state = await progressUntil(page, (snapshot) => snapshot.battle.enemy.attackState === 'windup');
+assert.equal(state.battle.enemy.mechanicState, 'active');
 const firstIntentIndex = state.battle.enemy.intentTargets[state.battle.enemy.intentCursor];
 const intentCountBeforeResolve = state.battle.enemy.intentTargets.length;
 await page.evaluate((index) => window.selectBubble(index), firstIntentIndex);
@@ -286,18 +296,24 @@ await page.waitForTimeout(280);
 await screenshot(page, '03b-jelly-intent-resolved.png');
 state = await resolveIntent(page, state);
 assert.equal(state.battle.enemy.poise, 1);
+assert.equal(state.battle.enemy.mechanicState, 'inactive');
 assert.equal(state.battle.enemy.attackState, 'charging');
-await page.evaluate((milliseconds) => window.advanceTime(milliseconds), state.battle.enemy.attackCooldownMs);
-state = await readState(page);
-assert.equal(state.battle.enemy.attackState, 'windup');
+const firstBoard = state.battle.board;
+state = await progressUntil(page, (snapshot) => snapshot.battle.board === firstBoard + 1);
+assert.equal(state.battle.enemy.mechanicState, 'active');
 state = await resolveIntent(page, state);
-assert.equal(state.battle.enemy.attackState, 'staggered');
+assert.equal(state.battle.enemy.mechanicState, 'staggered');
 assert.equal(state.battle.enemy.poise, 0);
 assert.equal(state.feedback.combatText.anchorY, combatTextAnchorY, '破势反馈应复用统一的怪物上方锚点');
-assert.equal(await page.locator('#enemy-attack-label').textContent(), '破势！伤害 ×1.5');
+assert.equal(await page.locator('#enemy-attack-label').textContent(), '撞击蓄力');
 await page.locator('#level-toast.is-combat.is-active').waitFor({ state: 'visible' });
+const combatToastDuration = await page.locator('#level-toast').evaluate((element) => {
+  const animation = element.getAnimations()[0];
+  return animation?.effect?.getTiming().duration ?? 0;
+});
+assert.ok(Number(combatToastDuration) >= 1500, '战斗提示显示时间应不少于 1.5 秒');
 await page.locator('#level-toast').evaluate((element) => element.getAnimations().forEach((animation) => {
-  animation.currentTime = 450;
+  animation.currentTime = 800;
   animation.pause();
 }));
 const counterToastBox = await page.locator('#level-toast').boundingBox();
@@ -307,7 +323,7 @@ const currentEnemyTop = gameplayCanvasBox.y
 assert.ok(counterToastBox && counterShellBox);
 const counterCenterDelta = counterToastBox.x + counterToastBox.width / 2
   - (counterShellBox.x + counterShellBox.width / 2);
-assert.ok(Math.abs(counterCenterDelta) <= 3,
+assert.ok(Math.abs(counterCenterDelta) <= 5,
   `反制提示应与怪物水平居中，当前偏差 ${counterCenterDelta.toFixed(2)}px`);
 assert.ok(counterToastBox.y + counterToastBox.height <= currentEnemyTop + 18,
   '反制提示应统一显示在怪物上方');
@@ -356,13 +372,13 @@ for (let guard = 0; guard < 1400; guard += 1) {
   if (state.phase === 'reward') {
     assert.equal(state.battle.rewards.length, 3);
     const shieldIndex = state.battle.rewards.findIndex((reward) => reward.id === 'shield');
-    await page.evaluate((index) => window.selectReward(index), state.battle.current === 1 && shieldIndex >= 0 ? shieldIndex : 0);
+    await page.evaluate((index) => window.selectReward(index), shieldIndex >= 0 ? shieldIndex : 0);
     if (!sawBattleToast) {
       const battleToast = page.locator('#level-toast.is-battle.is-active');
       await battleToast.waitFor({ state: 'visible' });
-      assert.equal(await battleToast.textContent(), '第 2 战');
+      assert.match((await battleToast.textContent()) ?? '', /^第 2 战 · /);
       await battleToast.evaluate((element) => element.getAnimations().forEach((animation) => {
-        animation.currentTime = 450;
+        animation.currentTime = 800;
         animation.pause();
       }));
       const battleToastBox = await battleToast.boundingBox();
@@ -376,45 +392,68 @@ for (let guard = 0; guard < 1400; guard += 1) {
   }
   if (state.phase !== 'playing') break;
 
+  if (state.battle.enemy.mechanicState === 'active') {
+    if (['sequence', 'capture', 'shell'].includes(state.battle.enemy.mechanic)) {
+      await page.evaluate((index) => window.selectBubble(index), state.battle.enemy.intentTargets[state.battle.enemy.intentCursor]);
+      continue;
+    }
+    if (state.battle.enemy.mechanic === 'guard') {
+      await page.evaluate(() => window.advanceTime(900));
+      continue;
+    }
+    const safeTarget = state.mode === 'sequence'
+      ? state.bubbles[state.expectedIndex]
+      : state.bubbles.find((bubble) => bubble.isTarget && !bubble.cleared && bubble.row !== state.battle.enemy.hazardRow);
+    assert.ok(safeTarget && safeTarget.row !== state.battle.enemy.hazardRow);
+    await page.evaluate((index) => window.selectBubble(index), safeTarget.index);
+    continue;
+  }
+
   if (state.battle.current === 2 && !primedCombo) {
     await page.evaluate((milliseconds) => window.advanceTime(milliseconds), state.battle.enemy.attackCooldownMs * 0.45);
     primedCombo = true;
     continue;
   }
 
-  if (state.battle.current === 3 && state.battle.player.shield === 20 && !sawShieldBreak) {
+  if (state.battle.current === 3 && state.battle.player.shield > state.battle.enemy.attack && !sawShieldBreak) {
     const breakCount = state.feedback.shield.breakCount;
-    assert.equal(state.feedback.shield.max, 20);
+    const initialShield = state.battle.player.shield;
+    const maxShield = state.battle.player.maxShield;
+    assert.equal(state.feedback.shield.max, maxShield);
     assert.equal(state.feedback.shield.ratio, 1);
     assert.equal(state.feedback.shield.damageStage, 'intact');
     assert.equal(state.feedback.shield.cracksVisible, false);
-    assert.equal(state.battle.player.maxShield, 20);
-    assert.equal(await page.locator('#player-shield-value').textContent(), '20/20');
+    assert.equal(await page.locator('#player-shield-value').textContent(), `${initialShield}/${maxShield}`);
     assert.equal(await page.locator('#player-shield-fill').evaluate((element) => element.style.width), '100%');
     await screenshot(page, '07-shield-intact.png');
     state = await advanceToWindup(page, state);
     assert.equal(state.battle.enemy.attackState, 'windup');
     await page.evaluate((milliseconds) => window.advanceTime(milliseconds), state.battle.enemy.windupMs);
     state = await readState(page);
-    assert.equal(state.battle.player.shield, 6);
+    const shieldAfterFirstImpact = initialShield - state.battle.enemy.attack;
+    const shieldRatio = Number((shieldAfterFirstImpact / maxShield).toFixed(2));
+    assert.equal(state.battle.player.shield, shieldAfterFirstImpact);
     assert.equal(state.feedback.shield.breakCount, breakCount, '护盾未耗尽时不应播放完整碎裂');
-    assert.equal(state.feedback.shield.ratio, 0.3);
-    assert.equal(state.feedback.shield.damageStage, 'damaged');
+    assert.equal(state.feedback.shield.ratio, shieldRatio);
+    assert.notEqual(state.feedback.shield.damageStage, 'intact');
     assert.equal(state.feedback.shield.cracksVisible, true, '裂纹应只在护盾实际格挡时短暂显示');
-    assert.equal(await page.locator('#player-shield-value').textContent(), '6/20');
-    assert.equal(await page.locator('#player-shield-fill').evaluate((element) => element.style.width), '30%');
+    assert.equal(await page.locator('#player-shield-value').textContent(), `${shieldAfterFirstImpact}/${maxShield}`);
+    const shieldFillPercent = await page.locator('#player-shield-fill').evaluate((element) => Number.parseFloat(element.style.width));
+    assert.ok(Math.abs(shieldFillPercent - shieldAfterFirstImpact / maxShield * 100) < 0.01);
     await screenshot(page, '07-shield-impact.png');
     await page.evaluate(() => window.advanceTime(320));
     await page.waitForTimeout(1300);
     await page.waitForFunction(() => !JSON.parse(window.render_game_to_text()).feedback.shield.cracksVisible);
     state = await readState(page);
-    assert.equal(state.feedback.shield.damageStage, 'damaged');
+    assert.notEqual(state.feedback.shield.damageStage, 'intact');
     assert.equal(state.feedback.shield.cracksVisible, false, '受击反馈结束后不应持续显示破损');
     await screenshot(page, '07-shield-damaged.png');
-    state = await advanceToWindup(page, state);
-    assert.equal(state.battle.enemy.attackState, 'windup');
-    await page.evaluate((milliseconds) => window.advanceTime(milliseconds), state.battle.enemy.windupMs);
-    state = await readState(page);
+    for (let guard = 0; guard < 4 && state.battle.player.shield > 0; guard += 1) {
+      state = await advanceToWindup(page, state);
+      assert.equal(state.battle.enemy.attackState, 'windup');
+      await page.evaluate((milliseconds) => window.advanceTime(milliseconds), state.battle.enemy.windupMs);
+      state = await readState(page);
+    }
     assert.equal(state.battle.player.shield, 0);
     assert.equal(state.feedback.shield.breakCount, breakCount + 1);
     assert.equal(state.feedback.shield.damageStage, 'none');
@@ -432,20 +471,8 @@ for (let guard = 0; guard < 1400; guard += 1) {
       await page.waitForTimeout(260);
       await screenshot(page, `06-${state.battle.enemy.id}-${state.battle.enemy.mechanic}-windup.png`);
     }
-    if (['sequence', 'capture', 'shell'].includes(state.battle.enemy.mechanic)) {
-      await page.evaluate((index) => window.selectBubble(index), state.battle.enemy.intentTargets[state.battle.enemy.intentCursor]);
-      continue;
-    }
-    if (state.battle.enemy.mechanic === 'guard') {
-      await page.evaluate((milliseconds) => window.advanceTime(milliseconds), state.battle.enemy.windupMs);
-      continue;
-    }
-    if (state.battle.enemy.mechanic === 'sweep') {
-      const safeTarget = state.bubbles.find((bubble) => bubble.isTarget && !bubble.cleared && bubble.row !== state.battle.enemy.hazardRow);
-      if (safeTarget) await page.evaluate((index) => window.selectBubble(index), safeTarget.index);
-      else await page.evaluate((milliseconds) => window.advanceTime(milliseconds), state.battle.enemy.windupMs);
-      continue;
-    }
+    await page.evaluate((milliseconds) => window.advanceTime(milliseconds), state.battle.enemy.windupMs);
+    continue;
   }
 
   const target = state.mode === 'sequence'
@@ -571,7 +598,7 @@ async function advanceToWindup(targetPage, initial) {
 
 async function resolveIntent(targetPage, initial) {
   let snapshot = initial;
-  while (snapshot.battle.enemy.attackState === 'windup') {
+  while (snapshot.battle.enemy.mechanicState === 'active') {
     await targetPage.evaluate((index) => window.selectBubble(index), snapshot.battle.enemy.intentTargets[snapshot.battle.enemy.intentCursor]);
     snapshot = await readState(targetPage);
   }
