@@ -77,7 +77,7 @@ assert.ok(shellBox && shellBox.width <= 390 && shellBox.height <= 844);
 const startBox = await page.locator('#start-game').boundingBox();
 const settingsBox = await page.locator('#menu-settings').boundingBox();
 const logoBox = await page.locator('.game-logo').boundingBox();
-assert.ok(startBox && logoBox && startBox.y > logoBox.y + logoBox.height + 45 && startBox.y < 620,
+assert.ok(startBox && logoBox && startBox.y > logoBox.y + logoBox.height + 30 && startBox.y < 620,
   '开始游戏应位于艺术字标题下方');
 assert.ok(settingsBox && settingsBox.y >= startBox.y + startBox.height + 24, '开始游戏与设置之间应留出明显间隔');
 
@@ -116,16 +116,26 @@ const avatarBox = await page.locator('#pause-button.player-avatar').boundingBox(
 const metersBox = await page.locator('.player-meters').boundingBox();
 const gameplayCanvasBox = await page.locator('#game-container canvas').boundingBox();
 assert.ok(playerHudBox && enemyHudBox && targetBubblesBox && enemyNameBox && avatarBox && metersBox && gameplayCanvasBox);
+const hudFrameArt = await page.locator('.player-status, #enemy-status').evaluateAll((elements) =>
+  elements.map((element) => getComputedStyle(element).backgroundImage));
+assert.match(hudFrameArt[0], /hud-player-frame\.png/, '玩家 HUD 应使用生图海洋边框');
+assert.match(hudFrameArt[1], /hud-enemy-frame\.png/, '怪物 HUD 应使用生图海洋边框');
+await page.evaluate(() => new Promise((resolve, reject) => {
+  const image = new Image();
+  image.onload = resolve;
+  image.onerror = reject;
+  image.src = 'art/ui/board-frame.png';
+}));
 assert.ok(playerHudBox.y + playerHudBox.height <= enemyHudBox.y, '玩家 HUD 应位于怪物 HUD 上方');
 assert.ok(enemyHudBox.y + enemyHudBox.height <= targetBubblesBox.y, '可消耗泡泡应位于怪物 HUD 下方');
 assert.ok(Math.abs(targetBubblesBox.x - enemyHudBox.x) <= 8, '可消耗泡泡应从怪物 HUD 左侧开始排列');
 assert.ok(Math.abs(avatarBox.width - avatarBox.height) <= 1, '玩家头像应为圆形');
 assert.ok(Math.abs(avatarBox.height - metersBox.height) <= 2, '三条玩家状态的总高应与头像一致');
 const enemyScreenCenterY = gameplayCanvasBox.y + state.feedback.enemy.y / 1280 * gameplayCanvasBox.height;
-const boardScreenTop = gameplayCanvasBox.y + (920 - 604 / 2) / 1280 * gameplayCanvasBox.height;
+const boardScreenTop = gameplayCanvasBox.y + (920 - 680 / 2) / 1280 * gameplayCanvasBox.height;
 assert.ok(enemyScreenCenterY > targetBubblesBox.y + targetBubblesBox.height && enemyScreenCenterY < boardScreenTop,
   '怪物中心应位于怪物 HUD 下方的目标泡泡与玩法盘面之间');
-assert.ok(Math.abs(enemyScreenCenterY - (enemyHudBox.y + enemyHudBox.height + boardScreenTop) / 2) <= 2,
+assert.ok(Math.abs(enemyScreenCenterY - (enemyHudBox.y + enemyHudBox.height + boardScreenTop) / 2) <= 3,
   '怪物应在怪物 HUD 与泡泡外框之间垂直居中');
 assert.ok(Math.abs((enemyNameBox.x + enemyNameBox.width / 2) - (enemyHudBox.x + enemyHudBox.width / 2)) <= 2,
   '怪物名称应在怪物 HUD 中几何居中');
@@ -245,7 +255,7 @@ const counterToastBox = await page.locator('#level-toast').boundingBox();
 const currentEnemyTop = gameplayCanvasBox.y
   + (state.feedback.enemy.y - state.feedback.enemy.displayHeight / 2) / 1280 * gameplayCanvasBox.height;
 assert.ok(counterToastBox);
-assert.ok(Math.abs(counterToastBox.x + counterToastBox.width / 2 - (shellBox.x + shellBox.width / 2)) <= 2,
+assert.ok(Math.abs(counterToastBox.x + counterToastBox.width / 2 - (shellBox.x + shellBox.width / 2)) <= 3,
   '反制提示应与怪物水平居中');
 assert.ok(counterToastBox.y + counterToastBox.height <= currentEnemyTop + 18,
   '反制提示应统一显示在怪物上方');

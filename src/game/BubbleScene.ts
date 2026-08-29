@@ -15,12 +15,13 @@ const WIDTH = 720;
 const HEIGHT = 1280;
 const BOARD_CENTER_Y = 920;
 const BOARD_SIZE = 604;
+const BOARD_FRAME_SIZE = 680;
 const ENEMY_CENTER_Y = 450;
 const ENEMY_RAGE_TINT = 0xff6f7d;
 
 export class BubbleScene extends Phaser.Scene {
   private background!: Phaser.GameObjects.Image;
-  private board!: Phaser.GameObjects.Graphics;
+  private board!: Phaser.GameObjects.Image;
   private boardGlow!: Phaser.GameObjects.Graphics;
   private intentLinks!: Phaser.GameObjects.Graphics;
   private shieldAura!: Phaser.GameObjects.Graphics;
@@ -55,6 +56,7 @@ export class BubbleScene extends Phaser.Scene {
 
   preload(): void {
     this.load.image('garden-bg', 'art/bubble-garden.webp');
+    this.load.image('board-frame', 'art/ui/board-frame.png');
     this.load.image('jelly-enemy', 'art/jelly-enemy.png');
     this.load.image('angler-enemy', 'art/angler-enemy.png');
     this.load.image('hermit-enemy', 'art/hermit-enemy.png');
@@ -99,7 +101,7 @@ export class BubbleScene extends Phaser.Scene {
     }).setDepth(32);
 
     this.boardGlow = this.add.graphics().setDepth(4);
-    this.board = this.add.graphics().setDepth(5);
+    this.board = this.add.image(WIDTH / 2, BOARD_CENTER_Y, 'board-frame').setDepth(5);
     this.intentLinks = this.add.graphics().setDepth(6);
     this.shieldAura = this.add.graphics().setDepth(46);
     this.drawBoard();
@@ -214,18 +216,16 @@ export class BubbleScene extends Phaser.Scene {
   }
 
   private drawBoard(): void {
-    const x = (WIDTH - BOARD_SIZE) / 2;
-    const y = BOARD_CENTER_Y - BOARD_SIZE / 2;
-
     this.boardGlow.clear();
     this.boardGlow.fillStyle(0x66cdbd, 0.2);
-    this.boardGlow.fillRoundedRect(x - 10, y + 14, BOARD_SIZE + 20, BOARD_SIZE + 20, 52);
-
-    this.board.clear();
-    this.board.fillStyle(0xfffdf3, 0.9);
-    this.board.fillRoundedRect(x, y, BOARD_SIZE, BOARD_SIZE, 46);
-    this.board.lineStyle(3, 0xffffff, 0.85);
-    this.board.strokeRoundedRect(x + 2, y + 2, BOARD_SIZE - 4, BOARD_SIZE - 4, 44);
+    this.boardGlow.fillRoundedRect(
+      (WIDTH - BOARD_FRAME_SIZE) / 2 - 5,
+      BOARD_CENTER_Y - BOARD_FRAME_SIZE / 2 + 16,
+      BOARD_FRAME_SIZE + 10,
+      BOARD_FRAME_SIZE,
+      58,
+    );
+    this.board.setDisplaySize(BOARD_FRAME_SIZE, BOARD_FRAME_SIZE);
   }
 
   private buildBubbles(snapshot: SessionSnapshot): void {
@@ -309,7 +309,7 @@ export class BubbleScene extends Phaser.Scene {
       this.shieldImpact = undefined;
       this.dropletEmitter.killAll();
       this.tweens.killTweensOf([this.board, this.boardGlow]);
-      this.board.setScale(1);
+      this.board.setDisplaySize(BOARD_FRAME_SIZE, BOARD_FRAME_SIZE);
       this.boardGlow.setScale(1);
     }
     if (effect === 'none') return;
@@ -875,7 +875,7 @@ export class BubbleScene extends Phaser.Scene {
     const canvasRect = this.game.canvas.getBoundingClientRect();
     const enemyHudRect = document.getElementById('enemy-status')?.getBoundingClientRect();
     if (!enemyHudRect || canvasRect.height <= 0) return ENEMY_CENTER_Y;
-    const boardTop = canvasRect.top + (BOARD_CENTER_Y - BOARD_SIZE / 2) / HEIGHT * canvasRect.height;
+    const boardTop = canvasRect.top + (BOARD_CENTER_Y - BOARD_FRAME_SIZE / 2) / HEIGHT * canvasRect.height;
     const screenCenter = (enemyHudRect.bottom + boardTop) / 2;
     return Phaser.Math.Clamp((screenCenter - canvasRect.top) / canvasRect.height * HEIGHT, 390, 520);
   }
