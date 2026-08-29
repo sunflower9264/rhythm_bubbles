@@ -224,7 +224,7 @@ export class AppUI {
   setLoadingProgress(progress: number): void {
     this.loadingProgress = Math.max(this.loadingProgress, Math.min(1, progress));
     this.get('#loading-progress-fill').style.width = `${this.loadingProgress * 100}%`;
-    this.text('#loading-progress-value', `${Math.round(this.loadingProgress * 100)}%`);
+    this.get('#loading-progress').setAttribute('aria-valuenow', String(Math.round(this.loadingProgress * 100)));
   }
 
   completeLoading(): void {
@@ -350,22 +350,7 @@ export class AppUI {
   private template(): string {
     return `
       <section id="loading-screen" class="loading-screen is-visible" aria-label="正在加载游戏资源" aria-live="polite">
-        <div class="loading-clash" aria-hidden="true">
-          <div class="loading-bubble-side">
-            ${[0, 1, 2, 3, 4, 5].map((index) => `<i style="--bubble-index:${index}"><span></span></i>`).join('')}
-          </div>
-          <div class="loading-impact"><i></i><i></i><i></i></div>
-          <div class="loading-monster-side">
-            <img class="loading-monster loading-monster--jelly" src="art/jelly-enemy.png" alt="">
-            <img class="loading-monster loading-monster--puffer" src="art/puffer-enemy.png" alt="">
-            <img class="loading-monster loading-monster--hermit" src="art/hermit-enemy.png" alt="">
-            <img class="loading-monster loading-monster--manta" src="art/manta-enemy.png" alt="">
-            <img class="loading-monster loading-monster--angler" src="art/angler-enemy.png" alt="">
-          </div>
-        </div>
-        <strong class="loading-message">加载资源中</strong>
-        <div class="loading-progress-wrap">
-          <div class="loading-progress-heading"><span>能量汇聚</span><b id="loading-progress-value">0%</b></div>
+        <div id="loading-progress" class="loading-progress-wrap" role="progressbar" aria-label="游戏资源加载进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
           <div class="loading-progress-track liquid-meter"><i id="loading-progress-fill" class="liquid-fill"></i></div>
         </div>
       </section>

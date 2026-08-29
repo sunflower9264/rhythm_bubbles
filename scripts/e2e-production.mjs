@@ -30,16 +30,21 @@ page.on('console', (message) => {
 
 await page.goto(`${BASE_URL}?seed=2654435761`, { waitUntil: 'domcontentloaded' });
 await page.locator('#loading-screen.is-visible').waitFor({ state: 'visible' });
-assert.equal(await page.locator('.loading-monster-side img').count(), 5, '加载页应展示当前全部五只怪物');
-assert.equal(await page.locator('.loading-bubble-side > i').count(), 6, '加载页左侧应形成泡泡阵营');
-assert.equal(await page.locator('.loading-message').textContent(), '加载资源中');
-await page.waitForFunction(() => [...document.querySelectorAll('.loading-monster-side img')]
-  .every((image) => image.complete && image.naturalWidth > 0));
-const loadingMessageBox = await page.locator('.loading-message').boundingBox();
+assert.equal(await page.locator('.loading-screen img, .loading-bubble-side, .loading-monster-side, .loading-impact').count(), 0,
+  '加载页不应再使用分散的 DOM 角色拼装');
+assert.equal(await page.locator('.loading-message, .loading-progress-heading').count(), 0,
+  '加载页只保留底部进度条，不显示中央或辅助文案');
+assert.equal((await page.locator('#loading-screen').textContent())?.trim(), '');
+const loadingBackground = await page.locator('#loading-screen').evaluate((element) => getComputedStyle(element).backgroundImage);
+assert.match(loadingBackground, /loading-battle-key-art\.png/, '加载页应使用独立的整张战斗原画');
+await page.evaluate(() => new Promise((resolve, reject) => {
+  const image = new Image();
+  image.onload = resolve;
+  image.onerror = reject;
+  image.src = 'art/loading-battle-key-art.png';
+}));
 const loadingProgressBox = await page.locator('.loading-progress-track').boundingBox();
-assert.ok(loadingMessageBox && Math.abs(loadingMessageBox.y + loadingMessageBox.height / 2 - 422) <= 12,
-  '加载提示应位于屏幕正中');
-assert.ok(loadingProgressBox && loadingProgressBox.y > 700, '药剂进度条应位于加载页底部');
+assert.ok(loadingProgressBox && loadingProgressBox.y > 770, '药剂进度条应独立位于加载页底部');
 await screenshot(page, '00-loading-screen.png');
 await page.locator('#loading-screen').waitFor({ state: 'hidden' });
 await page.waitForLoadState('networkidle');
