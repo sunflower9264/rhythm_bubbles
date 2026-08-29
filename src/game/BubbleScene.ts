@@ -15,7 +15,7 @@ const WIDTH = 720;
 const HEIGHT = 1280;
 const BOARD_CENTER_Y = 920;
 const BOARD_SIZE = 604;
-const ENEMY_CENTER_Y = 505;
+const ENEMY_CENTER_Y = 465;
 const ENEMY_RAGE_TINT = 0xff6f7d;
 
 export class BubbleScene extends Phaser.Scene {

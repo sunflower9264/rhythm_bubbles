@@ -52,6 +52,17 @@ test('五战自动按寻光、记忆和旋律推进，后续不再叠加新模�
   assert.equal(update.snapshot.mode, 'sequence');
 });
 
+test('所有战斗的泡泡盘面固定为 4x4', () => {
+  const session = new GameSession(fixedRandom);
+  let update = session.start();
+  for (let battle = 1; battle <= 5; battle += 1) {
+    if (battle > 1) update = playUntilBattle(session, battle, update);
+    assert.equal(update.snapshot.rows, 4);
+    assert.equal(update.snapshot.cols, 4);
+    assert.equal(update.snapshot.bubbles.length, 16);
+  }
+});
+
 test('记忆目标只统一显示一次，旋律顺序也统一显示后再隐藏', () => {
   const memorySession = new GameSession(fixedRandom);
   let update = playUntilBattle(memorySession, 2);

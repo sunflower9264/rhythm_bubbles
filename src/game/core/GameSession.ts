@@ -532,8 +532,8 @@ export class GameSession {
 
   private currentConfig() {
     if (!this.mode || this.bubbles.length === 0) return null;
-    const rows = this.battle <= 4 ? 3 : 4;
-    const cols = this.battle <= 2 ? 3 : 4;
+    const rows = 4;
+    const cols = 4;
     return {
       rows,
       cols,

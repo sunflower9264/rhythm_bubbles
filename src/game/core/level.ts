@@ -21,8 +21,8 @@ export function createLevelConfig(
   lastTargetCount: number,
   random: RandomSource,
 ): LevelConfig {
-  const rows = level <= 4 ? 3 : 4;
-  const cols = level <= 2 ? 3 : 4;
+  const rows = 4;
+  const cols = 4;
   const minTargets = Math.min(INITIAL_TARGETS + Math.floor((level - 1) / 2), MAX_TARGETS);
   const maxTargets = Math.min(minTargets + 1 + Math.floor(level / 3), MAX_TARGETS);
   const effectiveMin = Math.min(Math.max(minTargets, lastTargetCount), maxTargets);

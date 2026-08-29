@@ -57,9 +57,10 @@ assert.equal(state.battle.enemy.maxHp, 150);
 assert.equal(state.battle.player.attack, 8);
 assert.equal(state.battle.player.mistakeDamage, 5);
 assert.equal(state.battle.enemy.poise, 2);
-await page.waitForFunction(() => JSON.parse(window.render_game_to_text()).feedback.enemy.y === 505);
+await page.waitForFunction(() => Math.abs(JSON.parse(window.render_game_to_text()).feedback.enemy.y - 465) <= 1);
 state = await readState(page);
-assert.equal(state.feedback.enemy.y, 505, '怪物常态位置应小幅上移');
+assert.ok(Math.abs(state.feedback.enemy.y - 465) <= 1, '怪物应位于怪物 HUD 与泡泡盘面之间');
+assert.deepEqual(state.grid, { rows: 4, cols: 4 }, '所有战斗应固定使用 4x4 泡泡盘面');
 assert.equal(state.timerMs, 0, '盘面倒计时应已取消');
 assert.equal(await page.locator('.liquid-meter').count(), 6, '玩家三状态、敌人生命、蓄力和 Combo 应统一使用液体数值条');
 assert.equal(await page.locator('#battle-value, #enemy-attack-damage, #score-value, #attack-value, #shield-value, #mistake-value').count(), 0,
@@ -75,12 +76,17 @@ const targetBubblesBox = await page.locator('#target-bubbles').boundingBox();
 const enemyNameBox = await page.locator('#enemy-name').boundingBox();
 const avatarBox = await page.locator('#pause-button.player-avatar').boundingBox();
 const metersBox = await page.locator('.player-meters').boundingBox();
-assert.ok(playerHudBox && enemyHudBox && targetBubblesBox && enemyNameBox && avatarBox && metersBox);
+const gameplayCanvasBox = await page.locator('#game-container canvas').boundingBox();
+assert.ok(playerHudBox && enemyHudBox && targetBubblesBox && enemyNameBox && avatarBox && metersBox && gameplayCanvasBox);
 assert.ok(playerHudBox.y + playerHudBox.height <= enemyHudBox.y, '玩家 HUD 应位于怪物 HUD 上方');
 assert.ok(enemyHudBox.y + enemyHudBox.height <= targetBubblesBox.y, '可消耗泡泡应位于怪物 HUD 下方');
 assert.ok(Math.abs(targetBubblesBox.x - enemyHudBox.x) <= 8, '可消耗泡泡应从怪物 HUD 左侧开始排列');
 assert.ok(Math.abs(avatarBox.width - avatarBox.height) <= 1, '玩家头像应为圆形');
 assert.ok(Math.abs(avatarBox.height - metersBox.height) <= 2, '三条玩家状态的总高应与头像一致');
+const enemyScreenCenterY = gameplayCanvasBox.y + 465 / 1280 * gameplayCanvasBox.height;
+const boardScreenTop = gameplayCanvasBox.y + (920 - 604 / 2) / 1280 * gameplayCanvasBox.height;
+assert.ok(enemyScreenCenterY > targetBubblesBox.y + targetBubblesBox.height && enemyScreenCenterY < boardScreenTop,
+  '怪物中心应位于怪物 HUD 下方的目标泡泡与玩法盘面之间');
 assert.ok(Math.abs((enemyNameBox.x + enemyNameBox.width / 2) - (enemyHudBox.x + enemyHudBox.width / 2)) <= 2,
   '怪物名称应在怪物 HUD 中几何居中');
 const enemyPotionStyle = await page.locator('#enemy-health-fill').evaluate((element) => ({
