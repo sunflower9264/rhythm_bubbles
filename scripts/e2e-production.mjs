@@ -116,6 +116,8 @@ const avatarBox = await page.locator('#pause-button.player-avatar').boundingBox(
 const metersBox = await page.locator('.player-meters').boundingBox();
 const gameplayCanvasBox = await page.locator('#game-container canvas').boundingBox();
 assert.ok(playerHudBox && enemyHudBox && targetBubblesBox && enemyNameBox && avatarBox && metersBox && gameplayCanvasBox);
+const enemyHealthBox = await page.locator('.health-track--enemy').boundingBox();
+assert.ok(enemyHealthBox);
 const hudFrameArt = await page.locator('.player-status, #enemy-status').evaluateAll((elements) =>
   elements.map((element) => getComputedStyle(element).backgroundImage));
 assert.match(hudFrameArt[0], /hud-player-frame\.png/, '玩家 HUD 应使用生图海洋边框');
@@ -131,6 +133,16 @@ assert.ok(enemyHudBox.y + enemyHudBox.height <= targetBubblesBox.y, '可消耗�
 assert.ok(Math.abs(targetBubblesBox.x - enemyHudBox.x) <= 8, '可消耗泡泡应从怪物 HUD 左侧开始排列');
 assert.ok(Math.abs(avatarBox.width - avatarBox.height) <= 1, '玩家头像应为圆形');
 assert.ok(Math.abs(avatarBox.height - metersBox.height) <= 2, '三条玩家状态的总高应与头像一致');
+assert.ok(playerHudBox.x + playerHudBox.width - (metersBox.x + metersBox.width) >= 48,
+  '玩家 HUD 内容不得进入右侧角饰安全区');
+assert.ok(enemyHudBox.x + enemyHudBox.width - (enemyHealthBox.x + enemyHealthBox.width) >= 36,
+  '怪物 HUD 内容不得进入右侧角饰安全区');
+const boardFrameLeft = gameplayCanvasBox.x + (360 - 680 / 2) / 720 * gameplayCanvasBox.width;
+const firstBubbleCenter = 360 - 470 / 2 + 470 / 4 / 2;
+const bubbleRadius = ((604 - 70) / 4 * 0.76) / 2;
+const firstBubbleLeft = gameplayCanvasBox.x + (firstBubbleCenter - bubbleRadius) / 720 * gameplayCanvasBox.width;
+assert.ok(firstBubbleLeft - boardFrameLeft >= gameplayCanvasBox.width * (680 / 720) * 0.16,
+  '四角泡泡不得进入盘面边框装饰区');
 const enemyScreenCenterY = gameplayCanvasBox.y + state.feedback.enemy.y / 1280 * gameplayCanvasBox.height;
 const boardScreenTop = gameplayCanvasBox.y + (920 - 680 / 2) / 1280 * gameplayCanvasBox.height;
 assert.ok(enemyScreenCenterY > targetBubblesBox.y + targetBubblesBox.height && enemyScreenCenterY < boardScreenTop,
@@ -252,11 +264,14 @@ await page.locator('#level-toast').evaluate((element) => element.getAnimations()
   animation.pause();
 }));
 const counterToastBox = await page.locator('#level-toast').boundingBox();
+const counterShellBox = await page.locator('#game-shell').boundingBox();
 const currentEnemyTop = gameplayCanvasBox.y
   + (state.feedback.enemy.y - state.feedback.enemy.displayHeight / 2) / 1280 * gameplayCanvasBox.height;
-assert.ok(counterToastBox);
-assert.ok(Math.abs(counterToastBox.x + counterToastBox.width / 2 - (shellBox.x + shellBox.width / 2)) <= 3,
-  '反制提示应与怪物水平居中');
+assert.ok(counterToastBox && counterShellBox);
+const counterCenterDelta = counterToastBox.x + counterToastBox.width / 2
+  - (counterShellBox.x + counterShellBox.width / 2);
+assert.ok(Math.abs(counterCenterDelta) <= 3,
+  `反制提示应与怪物水平居中，当前偏差 ${counterCenterDelta.toFixed(2)}px`);
 assert.ok(counterToastBox.y + counterToastBox.height <= currentEnemyTop + 18,
   '反制提示应统一显示在怪物上方');
 await screenshot(page, '05-jelly-staggered.png');
@@ -462,6 +477,9 @@ const modalFrames = await page.locator('.modal-card').evaluateAll((elements) =>
   elements.map((element) => getComputedStyle(element).borderImageSource));
 assert.equal(modalFrames.length, 6);
 assert.ok(modalFrames.every((source) => /modal-frame\.png/.test(source)), '所有弹窗应共用生图海洋边框');
+const modalSlices = await page.locator('.modal-card').evaluateAll((elements) =>
+  elements.map((element) => Number.parseFloat(getComputedStyle(element).borderImageSlice)));
+assert.ok(modalSlices.every((slice) => slice >= 180), '弹窗九宫格必须完整保留角饰，不能切入拉伸区');
 const musicVolume = page.locator('#music-volume');
 assert.equal(await musicVolume.inputValue(), '40');
 await musicVolume.fill('65');
@@ -545,7 +563,7 @@ async function tapBubble(targetPage, snapshot, index) {
   const canvas = targetPage.locator('#game-container canvas');
   const box = await canvas.boundingBox();
   assert.ok(box && bubble);
-  const innerSize = 604 - 70;
+  const innerSize = 470;
   const cellWidth = innerSize / snapshot.grid.cols;
   const cellHeight = innerSize / snapshot.grid.rows;
   const logicalX = 360 - innerSize / 2 + cellWidth / 2 + bubble.col * cellWidth;

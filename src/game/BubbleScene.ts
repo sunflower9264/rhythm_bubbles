@@ -16,6 +16,7 @@ const HEIGHT = 1280;
 const BOARD_CENTER_Y = 920;
 const BOARD_SIZE = 604;
 const BOARD_FRAME_SIZE = 680;
+const BOARD_PLAY_SIZE = 470;
 const ENEMY_CENTER_Y = 450;
 const ENEMY_RAGE_TINT = 0xff6f7d;
 
@@ -232,10 +233,12 @@ export class BubbleScene extends Phaser.Scene {
     this.clearBoard();
     if (snapshot.rows === 0 || snapshot.cols === 0) return;
 
-    const innerSize = BOARD_SIZE - 70;
+    const innerSize = BOARD_PLAY_SIZE;
     const cellWidth = innerSize / snapshot.cols;
     const cellHeight = innerSize / snapshot.rows;
-    const diameter = Math.min(cellWidth, cellHeight) * (snapshot.cols === 3 ? 0.73 : 0.76);
+    const bubbleSizeArea = BOARD_SIZE - 70;
+    const diameter = Math.min(bubbleSizeArea / snapshot.cols, bubbleSizeArea / snapshot.rows)
+      * (snapshot.cols === 3 ? 0.73 : 0.76);
     const startX = WIDTH / 2 - innerSize / 2 + cellWidth / 2;
     const startY = BOARD_CENTER_Y - innerSize / 2 + cellHeight / 2;
 
@@ -410,7 +413,7 @@ export class BubbleScene extends Phaser.Scene {
     if (snapshot.enemyAttackState !== 'windup') return;
 
     if (snapshot.enemyMechanic === 'sweep' && snapshot.enemyHazardRow !== null) {
-      const innerSize = BOARD_SIZE - 70;
+      const innerSize = BOARD_PLAY_SIZE;
       const rows = Math.max(1, snapshot.rows);
       const cellHeight = innerSize / rows;
       const top = BOARD_CENTER_Y - innerSize / 2 + snapshot.enemyHazardRow * cellHeight;

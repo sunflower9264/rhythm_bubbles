@@ -631,7 +631,7 @@ input:focus-visible + i {
   gap: 0.52rem;
   width: min(100%, 22rem);
   margin: 0 auto;
-  padding: 0.52rem 2.5rem 0.52rem 1.05rem;
+  padding: 0.52rem 3.1rem 0.52rem 1.05rem;
   background: url('/art/ui/hud-player-frame.png') center / 100% 100% no-repeat;
 }
 
@@ -747,7 +747,7 @@ input:focus-visible + i {
 .enemy-status {
   width: min(100%, 22rem);
   margin: 0.38rem auto 0;
-  padding: 0.45rem 1.3rem 0.52rem;
+  padding: 0.45rem 2.5rem 0.52rem;
   background: url('/art/ui/hud-enemy-frame.png') center / 100% 100% no-repeat;
 }
 
@@ -1376,8 +1376,8 @@ input:focus-visible + i {
 .modal-card {
   width: 100%;
   padding: clamp(1.2rem, 5.2vw, 1.7rem);
-  border: clamp(0.85rem, 3.8vw, 1.15rem) solid transparent;
-  border-image: url('/art/ui/modal-frame.png') 130 fill / 1.75 / 0.22rem stretch;
+  border: clamp(1rem, 4.5vw, 1.25rem) solid transparent;
+  border-image: url('/art/ui/modal-frame.png') 180 fill / 1.7 / 0.18rem stretch;
   border-radius: 0;
   background: transparent;
   box-shadow: none;
