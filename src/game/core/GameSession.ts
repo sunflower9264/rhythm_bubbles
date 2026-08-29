@@ -14,10 +14,10 @@ const BASE_PLAYER_HP = 100;
 const BASE_ATTACK_POWER = 8;
 
 const REWARDS: RewardChoice[] = [
-  { id: 'power', title: '泡泡利刃', description: '每次正确点击伤害 +2', icon: '✦' },
-  { id: 'heart', title: '果冻心', description: '最大生命 +12，并恢复 18 点', icon: '♥' },
-  { id: 'shield', title: '糖霜护盾', description: '获得 20 点护盾，优先抵挡伤害', icon: '◇' },
-  { id: 'time', title: '回响钟摆', description: '恢复 14 点生命', icon: '◷' },
+  { id: 'power', title: '泡泡利刃', description: '每次正确点击伤害 +2' },
+  { id: 'heart', title: '果冻心', description: '最大生命 +12，并恢复 18 点' },
+  { id: 'shield', title: '糖霜护盾', description: '获得 20 点护盾，优先抵挡伤害' },
+  { id: 'time', title: '回响钟摆', description: '恢复 14 点生命' },
 ];
 
 type TransitionTarget = 'next-board' | 'reward' | 'victory';

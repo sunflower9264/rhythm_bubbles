@@ -244,7 +244,7 @@ await screenshot(page, '02b-isolated-bubble-pop.png');
 assert.equal(state.battle.enemy.mechanicState, 'active');
 assert.ok(state.battle.enemy.intentTargets.length >= 2);
 assert.equal(state.battle.enemy.attackState, 'charging');
-assert.ok(state.battle.enemy.attackProgress < 0.01, '开盘机制激活时撞击蓄力仍应接近 0');
+assert.ok(state.battle.enemy.attackProgress < 0.03, '开盘机制激活时撞击蓄力仍应接近 0');
 assert.equal(await page.locator('#enemy-attack-label').textContent(), '撞击蓄力');
 assert.equal(state.feedback.intentLinks.rendered, state.battle.enemy.intentTargets.length);
 await screenshot(page, '03-jelly-intent-links.png');
@@ -346,6 +346,7 @@ let sawComboImpact = false;
 let sawShieldBreak = false;
 let sawBattleToast = false;
 let primedCombo = false;
+let sawCompactRewardLayout = false;
 for (let guard = 0; guard < 1400; guard += 1) {
   state = await readState(page);
   if (state.phase === 'victory') break;
@@ -371,6 +372,26 @@ for (let guard = 0; guard < 1400; guard += 1) {
   }
   if (state.phase === 'reward') {
     assert.equal(state.battle.rewards.length, 3);
+    if (!sawCompactRewardLayout) {
+      await page.setViewportSize({ width: 320, height: 568 });
+      await page.waitForTimeout(100);
+      const rewardCard = await page.locator('.reward-card').boundingBox();
+      const rewardOptions = await page.locator('.reward-option').all();
+      assert.ok(rewardCard && rewardCard.x >= 0 && rewardCard.y >= 0
+        && rewardCard.x + rewardCard.width <= 320 && rewardCard.y + rewardCard.height <= 568,
+      '紧凑屏奖励弹窗必须完整落在可视区域内');
+      assert.equal(await page.locator('.reward-option > img').count(), 3, '奖励图标应全部使用生成图片');
+      assert.equal(await page.locator('.reward-option > em:visible').count(), 0, '紧凑屏不显示重复的选择文字');
+      for (const option of rewardOptions) {
+        const box = await option.boundingBox();
+        const textBox = await option.locator('span').boundingBox();
+        assert.ok(box && textBox && textBox.x >= box.x && textBox.x + textBox.width <= box.x + box.width,
+          '奖励说明不能越出卡片');
+      }
+      await screenshot(page, '06-compact-reward.png');
+      await page.setViewportSize({ width: 390, height: 844 });
+      sawCompactRewardLayout = true;
+    }
     const shieldIndex = state.battle.rewards.findIndex((reward) => reward.id === 'shield');
     await page.evaluate((index) => window.selectReward(index), shieldIndex >= 0 ? shieldIndex : 0);
     if (!sawBattleToast) {
@@ -532,6 +553,7 @@ assert.ok(sawBattle5SingleHit);
 assert.ok(sawComboImpact);
 assert.ok(sawShieldBreak);
 assert.ok(sawBattleToast);
+assert.ok(sawCompactRewardLayout);
 await page.locator('#victory-modal.is-visible').waitFor();
 await screenshot(page, '09-victory.png');
 

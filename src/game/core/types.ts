@@ -59,7 +59,6 @@ export interface RewardChoice {
   id: RewardId;
   title: string;
   description: string;
-  icon: string;
 }
 
 export interface SessionSnapshot {

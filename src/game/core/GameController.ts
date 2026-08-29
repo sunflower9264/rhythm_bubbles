@@ -14,6 +14,7 @@ type Listener = (update: SessionUpdate, preferences: Preferences) => void;
 
 const PREFERENCES_KEY = 'rhythm-bubbles:preferences:v2';
 const BEST_SCORE_KEY = 'rhythm-bubbles:best-run:v3';
+const STATE_TICK_MS = 100;
 
 const DEFAULT_PREFERENCES: Preferences = {
   sound: true,
@@ -31,6 +32,7 @@ export class GameController {
     reducedMotion: false,
   };
   private bestScore = this.readStorage<number>(BEST_SCORE_KEY, 0);
+  private pendingTimeMs = 0;
 
   constructor(random?: RandomSource) {
     this.session = new GameSession(random);
@@ -54,10 +56,17 @@ export class GameController {
     this.commit(this.session.selectReward(index));
   }
 
-  tick(milliseconds: number): void {
+  tick(milliseconds: number, flush = false): void {
     const snapshot = this.session.getSnapshot();
-    if (!['preview', 'playing', 'transition'].includes(snapshot.phase)) return;
-    this.commit(this.session.advanceTime(milliseconds));
+    if (!['preview', 'playing', 'transition'].includes(snapshot.phase)) {
+      this.pendingTimeMs = 0;
+      return;
+    }
+    this.pendingTimeMs += milliseconds;
+    if (!flush && this.pendingTimeMs < STATE_TICK_MS) return;
+    const elapsed = this.pendingTimeMs;
+    this.pendingTimeMs = 0;
+    this.commit(this.session.advanceTime(elapsed));
   }
 
   pause(): void {

@@ -51,6 +51,10 @@ export class BubbleScene extends Phaser.Scene {
   private combatText?: Phaser.GameObjects.Text;
   private lastCombatText = { message: '', y: 0 };
   private recentSfx: string[] = [];
+  private bubbleVisualKey = '';
+  private intentVisualKey = '';
+  private shieldVisualKey = '';
+  private audioKey = '';
 
   constructor(private readonly controller: GameController) {
     super({ key: 'BubbleScene' });
@@ -191,6 +195,8 @@ export class BubbleScene extends Phaser.Scene {
   private sync(update: SessionUpdate): void {
     const snapshot = update.snapshot;
     const nextLevelKey = `${snapshot.mode}:${snapshot.battle}:${snapshot.board}:${snapshot.rows}x${snapshot.cols}`;
+    const shouldRenderContinuously = ['preview', 'playing', 'transition'].includes(snapshot.phase);
+    if (shouldRenderContinuously && !this.game.loop.running) this.game.loop.wake();
 
     if (snapshot.phase === 'menu') {
       this.clearBoard();
@@ -201,7 +207,12 @@ export class BubbleScene extends Phaser.Scene {
       this.shieldAura.clear();
       this.renderedIntentLinkCount = 0;
       this.shieldVisualMax = 0;
+      this.bubbleVisualKey = '';
+      this.intentVisualKey = '';
+      this.shieldVisualKey = '';
+      this.audioKey = '';
       this.bgm?.stop();
+      this.game.loop.sleep();
       return;
     }
 
@@ -218,6 +229,7 @@ export class BubbleScene extends Phaser.Scene {
     this.drawIntentLinks(snapshot);
     this.handleEffect(update);
     this.syncAudio();
+    if (['paused', 'reward'].includes(snapshot.phase)) this.game.loop.sleep();
   }
 
   private drawBoard(): void {
@@ -266,6 +278,17 @@ export class BubbleScene extends Phaser.Scene {
   }
 
   private updateBubbles(snapshot: SessionSnapshot, update: SessionUpdate): void {
+    const visualKey = [
+      snapshot.phase,
+      snapshot.visibleTargetIndices.join(','),
+      snapshot.enemyMechanic,
+      snapshot.enemyMechanicState,
+      snapshot.enemyIntentTargets.join(','),
+      snapshot.enemyIntentCursor,
+      snapshot.bubbles.map((bubble) => bubble.cleared ? '1' : '0').join(''),
+    ].join('|');
+    if (visualKey === this.bubbleVisualKey && update.effect === 'none') return;
+    this.bubbleVisualKey = visualKey;
     const visibleTargets = new Set(snapshot.visibleTargetIndices);
     const intentTargets = new Map(snapshot.enemyIntentTargets
       .slice(snapshot.enemyIntentCursor)
@@ -415,6 +438,17 @@ export class BubbleScene extends Phaser.Scene {
   }
 
   private drawIntentLinks(snapshot: SessionSnapshot): void {
+    const visualKey = [
+      snapshot.enemyMechanicState,
+      snapshot.enemyMechanic,
+      snapshot.enemyHazardRow,
+      snapshot.enemyIntentTargets.join(','),
+      snapshot.enemyIntentCursor,
+      snapshot.rows,
+      this.currentLevelKey,
+    ].join('|');
+    if (visualKey === this.intentVisualKey) return;
+    this.intentVisualKey = visualKey;
     this.intentLinks.clear();
     this.renderedIntentLinkCount = 0;
     if (snapshot.enemyMechanicState !== 'active') return;
@@ -465,6 +499,9 @@ export class BubbleScene extends Phaser.Scene {
   }
 
   private drawShield(snapshot: SessionSnapshot): void {
+    const visualKey = `${snapshot.phase}:${snapshot.shield}:${snapshot.maxShield}`;
+    if (visualKey === this.shieldVisualKey) return;
+    this.shieldVisualKey = visualKey;
     this.shieldAura.clear().setDepth(46);
     if (snapshot.shield <= 0 || ['menu', 'reward', 'victory', 'game-over'].includes(snapshot.phase)) return;
     this.shieldVisualMax = Math.max(this.shieldVisualMax, snapshot.shield);
@@ -954,6 +991,9 @@ export class BubbleScene extends Phaser.Scene {
   }
 
   private syncAudio(): void {
+    const audioKey = `${this.preferences.music}:${this.preferences.musicVolume}:${this.latestSnapshot.phase === 'menu'}`;
+    if (audioKey === this.audioKey) return;
+    this.audioKey = audioKey;
     if (!this.preferences.music || this.latestSnapshot.phase === 'menu') {
       this.bgm?.stop();
       return;
@@ -1001,6 +1041,8 @@ export class BubbleScene extends Phaser.Scene {
     }
     this.bubbleViews = [];
     this.currentLevelKey = '';
+    this.bubbleVisualKey = '';
+    this.intentVisualKey = '';
   }
 
   private clearTransientEffects(): void {

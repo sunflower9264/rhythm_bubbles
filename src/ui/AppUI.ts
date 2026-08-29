@@ -97,7 +97,7 @@ export class AppUI {
     victory.classList.toggle('is-visible', snapshot.phase === 'victory');
     if (snapshot.phase !== 'game-over') {
       this.clearGameOverReveal();
-      gameOver.classList.remove('is-visible');
+      if (gameOver.classList.contains('is-visible')) gameOver.classList.remove('is-visible');
     } else if (['mistake', 'counter-miss', 'enemy-impact', 'timeout-impact'].includes(update.effect) && !preferences.reducedMotion) {
       this.clearGameOverReveal();
       this.gameOverRevealPending = true;
@@ -135,11 +135,11 @@ export class AppUI {
       this.lastPlayerHealthRatio = playerRatio;
     }
     const shieldRatio = snapshot.maxShield > 0 ? snapshot.shield / snapshot.maxShield : 0;
-    this.get('#player-shield-fill').style.width = `${Math.max(0, Math.min(1, shieldRatio)) * 100}%`;
+    this.style('#player-shield-fill', 'width', `${Math.max(0, Math.min(1, shieldRatio)) * 100}%`);
     const energyRatio = snapshot.targetCount > 0
       ? (snapshot.targetCount - snapshot.remainingTargets) / snapshot.targetCount
       : 0;
-    this.get('#player-energy-fill').style.width = `${Math.max(0, Math.min(1, energyRatio)) * 100}%`;
+    this.style('#player-energy-fill', 'width', `${Math.max(0, Math.min(1, energyRatio)) * 100}%`);
     this.text('#player-energy-value', `${Math.round(Math.max(0, Math.min(1, energyRatio)) * 100)}%`);
     this.renderTargetBubbles(snapshot.remainingTargets);
     this.get('#enemy-status').classList.toggle('is-boss', snapshot.enemyIsBoss);
@@ -154,7 +154,7 @@ export class AppUI {
     comboBurst.classList.toggle('is-fever', snapshot.combo >= 8);
     comboBurst.classList.toggle('is-window-urgent', comboVisible && snapshot.comboRemainingMs <= 350);
     const comboProgress = snapshot.comboWindowMs > 0 ? snapshot.comboRemainingMs / snapshot.comboWindowMs : 0;
-    comboBurst.style.setProperty('--combo-progress', `${Math.max(0, Math.min(1, comboProgress)) * 100}%`);
+    this.style(comboBurst, '--combo-progress', `${Math.max(0, Math.min(1, comboProgress)) * 100}%`);
 
     const attackIntent = this.get('#enemy-attack-intent');
     const attackFrozen = ['preview', 'paused', 'reward', 'transition'].includes(snapshot.phase);
@@ -166,26 +166,28 @@ export class AppUI {
           ? '撞击恢复'
           : attackFrozen ? '攻击暂停' : '撞击蓄力';
     this.text('#enemy-attack-label', attackLabel);
-    attackIntent.style.setProperty('--attack-progress', `${snapshot.enemyAttackProgress * 100}%`);
+    this.style(attackIntent, '--attack-progress', `${snapshot.enemyAttackProgress * 100}%`);
     attackIntent.classList.toggle('is-windup', snapshot.enemyAttackState === 'windup');
-    attackIntent.classList.remove('is-staggered');
+    if (attackIntent.classList.contains('is-staggered')) attackIntent.classList.remove('is-staggered');
     attackIntent.classList.toggle('is-frozen', attackFrozen);
     attackIntent.classList.toggle('is-broken', snapshot.enemyHp === 0);
 
     for (const key of ['sound', 'music', 'haptics'] as const) {
       const input = this.root.querySelector<HTMLInputElement>(`[data-preference="${key}"]`);
-      if (input) input.checked = preferences[key];
+      if (input && input.checked !== preferences[key]) input.checked = preferences[key];
     }
     const musicVolume = Math.round(preferences.musicVolume * 100);
     const musicVolumeInput = this.get<HTMLInputElement>('#music-volume');
-    musicVolumeInput.value = String(musicVolume);
-    musicVolumeInput.style.setProperty('--volume-progress', `${musicVolume}%`);
+    if (musicVolumeInput.value !== String(musicVolume)) musicVolumeInput.value = String(musicVolume);
+    this.style(musicVolumeInput, '--volume-progress', `${musicVolume}%`);
     this.text('#music-volume-value', `${musicVolume}%`);
 
     this.text('#best-run', String(this.controller.getBestScore()));
 
     snapshot.rewardChoices.forEach((choice, index) => {
-      this.text(`#reward-icon-${index}`, choice.icon);
+      const icon = this.get<HTMLImageElement>(`#reward-icon-${index}`);
+      const src = `art/ui/reward-${choice.id}.png`;
+      if (!icon.src.endsWith(src)) icon.src = src;
       this.text(`#reward-title-${index}`, choice.title);
       this.text(`#reward-description-${index}`, choice.description);
     });
@@ -360,7 +362,8 @@ export class AppUI {
       bubble.setAttribute('aria-hidden', 'true');
       targetBubbles.append(bubble);
     }
-    targetBubbles.setAttribute('aria-label', `还需点击 ${remaining} 个泡泡`);
+    const label = `还需点击 ${remaining} 个泡泡`;
+    if (targetBubbles.getAttribute('aria-label') !== label) targetBubbles.setAttribute('aria-label', label);
   }
 
   private onClick(selector: string, callback: () => void): void {
@@ -368,7 +371,13 @@ export class AppUI {
   }
 
   private text(selector: string, value: string): void {
-    this.get(selector).textContent = value;
+    const element = this.get(selector);
+    if (element.textContent !== value) element.textContent = value;
+  }
+
+  private style(target: string | HTMLElement, property: string, value: string): void {
+    const element = typeof target === 'string' ? this.get(target) : target;
+    if (element.style.getPropertyValue(property) !== value) element.style.setProperty(property, value);
   }
 
   private selectMenuEnemy(): void {
@@ -458,7 +467,7 @@ export class AppUI {
 
       <section id="gameover-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="gameover-title">
         <div class="modal-card modal-card--result">
-          <div class="result-face" aria-hidden="true"><span>×﹏×</span></div>
+          <div class="result-face" aria-hidden="true"><img src="art/ui/result-defeat.png" alt=""></div>
           <span class="modal-kicker">节拍断开了</span><h2 id="gameover-title">挑战失败</h2>
           <div class="result-grid"><div><small>得分</small><b id="gameover-score">0</b></div><div><small>到达</small><b>第 <span id="gameover-level">1</span> 战</b></div><div><small>最佳</small><b id="gameover-best">0</b></div></div>
           <button id="gameover-restart" class="primary-button" type="button">重新挑战</button>
@@ -470,14 +479,14 @@ export class AppUI {
         <div class="modal-card reward-card">
           <span class="modal-kicker">战斗胜利 · 选择一个</span><h2 id="reward-title">强化泡泡</h2><p>奖励会保留到本轮挑战结束。</p>
           <div class="reward-list">
-            ${[0, 1, 2].map((index) => `<button class="reward-option" data-reward-index="${index}" type="button"><i id="reward-icon-${index}">✦</i><span><b id="reward-title-${index}">泡泡利刃</b><small id="reward-description-${index}">提高攻击力</small></span><em>选择</em></button>`).join('')}
+            ${[0, 1, 2].map((index) => `<button class="reward-option" data-reward-index="${index}" type="button"><img id="reward-icon-${index}" src="art/ui/reward-power.png" alt=""><span><b id="reward-title-${index}">泡泡利刃</b><small id="reward-description-${index}">提高攻击力</small></span><em>选择</em></button>`).join('')}
           </div>
         </div>
       </section>
 
       <section id="victory-modal" class="modal modal--victory" role="dialog" aria-modal="true" aria-labelledby="victory-title">
         <div class="modal-card modal-card--result victory-card">
-          <div class="victory-crown" aria-hidden="true">✦</div>
+          <div class="victory-crown" aria-hidden="true"><img src="art/ui/result-victory.png" alt=""></div>
           <span class="modal-kicker">五战全胜</span><h2 id="victory-title">花园重归节拍</h2><p>星尘巨王也被你的泡泡弹走啦！</p>
           <div class="result-grid"><div><small>总得分</small><b id="victory-score">0</b></div><div><small>战斗</small><b>5/5</b></div><div><small>剩余生命</small><b id="victory-health">0</b></div></div>
           <button id="victory-restart" class="primary-button" type="button">再闯一轮</button>

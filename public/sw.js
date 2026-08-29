@@ -1,4 +1,4 @@
-const CACHE_NAME = 'rhythm-bubbles-v56';
+const CACHE_NAME = 'rhythm-bubbles-v57';
 const CORE_ASSETS = [
   './',
   './manifest.webmanifest',
@@ -14,6 +14,12 @@ const CORE_ASSETS = [
   './art/ui/hud-player-frame.png',
   './art/ui/hud-enemy-frame.png',
   './art/ui/board-frame.png',
+  './art/ui/reward-power.png',
+  './art/ui/reward-heart.png',
+  './art/ui/reward-shield.png',
+  './art/ui/reward-time.png',
+  './art/ui/result-defeat.png',
+  './art/ui/result-victory.png',
   './art/icon-192.png',
   './art/icon-512.png',
   './art/jelly-enemy.png',

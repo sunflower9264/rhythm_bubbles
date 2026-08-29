@@ -729,7 +729,7 @@ input:focus-visible + i {
     radial-gradient(circle at 57% 91%, var(--potion-bubble) 0 0.045rem, transparent 0.065rem),
     radial-gradient(circle at 76% 67%, rgba(255, 255, 255, 0.58) 0 0.065rem, transparent 0.085rem),
     radial-gradient(circle at 91% 96%, var(--potion-bubble) 0 0.035rem, transparent 0.055rem);
-  animation: potion-bubbles-rise 2100ms ease-in infinite;
+  animation: potion-bubbles-rise 2100ms steps(12, end) infinite;
 }
 
 .liquid-fill::after {
@@ -743,7 +743,7 @@ input:focus-visible + i {
   background: linear-gradient(90deg, transparent, var(--potion-meniscus));
   box-shadow: 0 0 0.28rem var(--potion-meniscus), inset 1px 0 rgba(255, 255, 255, 0.38);
   transform-origin: right center;
-  animation: potion-meniscus 1300ms ease-in-out infinite alternate;
+  animation: potion-meniscus 1300ms steps(8, end) infinite alternate;
 }
 
 .enemy-status {
@@ -1252,6 +1252,10 @@ input:focus-visible + i {
   margin-bottom: 1rem;
 }
 
+.reward-card {
+  padding: clamp(0.9rem, 3.8vw, 1.3rem);
+}
+
 .reward-list {
   display: grid;
   gap: 0.65rem;
@@ -1263,7 +1267,7 @@ input:focus-visible + i {
   --reward-edge: #3da79d;
   --reward-glow: rgba(47, 159, 150, 0.2);
   display: grid;
-  grid-template-columns: 3rem minmax(0, 1fr) auto;
+  grid-template-columns: 2.75rem minmax(0, 1fr) auto;
   align-items: center;
   gap: 0.7rem;
   width: 100%;
@@ -1302,19 +1306,12 @@ input:focus-visible + i {
   box-shadow: inset 0 2px rgba(255, 255, 255, 0.45), 0 1px 0 var(--reward-edge), 0 5px 10px var(--reward-glow);
 }
 
-.reward-option > i {
-  display: grid;
-  place-items: center;
-  width: 3rem;
-  height: 3rem;
-  border: 3px solid white;
-  border-radius: 50% 44% 52% 48%;
-  background: linear-gradient(145deg, var(--butter), #ff9d83);
-  box-shadow: 0 5px 12px rgba(233, 105, 115, 0.18);
-  color: white;
-  font-size: 1.25rem;
-  font-style: normal;
-  text-shadow: 0 2px rgba(82, 103, 168, 0.16);
+.reward-option > img {
+  display: block;
+  width: 2.75rem;
+  height: 2.75rem;
+  object-fit: contain;
+  filter: drop-shadow(0 0.24rem 0.28rem rgba(82, 103, 168, 0.18));
 }
 
 .reward-option span {
@@ -1346,14 +1343,16 @@ input:focus-visible + i {
   width: 4.7rem;
   height: 4.7rem;
   margin: -0.2rem auto 0.75rem;
-  border: 5px solid white;
-  border-radius: 45% 55% 47% 53%;
-  background: linear-gradient(145deg, #ffe58e, #ff9b87);
-  box-shadow: 0 10px 25px rgba(233, 105, 115, 0.22);
-  color: white;
-  font-size: 2rem;
   transform: rotate(-5deg);
   animation: victory-pulse 1.3s ease-in-out infinite alternate;
+}
+
+.victory-crown img,
+.result-face img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 @keyframes victory-pulse {
@@ -1514,13 +1513,14 @@ input:focus-visible + i {
   width: 4.4rem;
   height: 4.4rem;
   margin: -0.15rem auto 0.8rem;
-  border: 5px solid white;
-  border-radius: 50% 46% 52% 48%;
-  background: linear-gradient(145deg, #8fe8d8, var(--mint));
-  box-shadow: 0 9px 23px rgba(47, 159, 150, 0.22);
-  color: var(--blueberry);
-  font-size: 2rem;
   transform: rotate(-4deg);
+}
+
+.screen:not(.is-visible) *,
+.hud:not(.is-visible) *,
+.modal:not(.is-visible) *,
+.loading-screen:not(.is-visible) * {
+  animation-play-state: paused !important;
 }
 
 .result-grid {
@@ -1899,6 +1899,17 @@ input:focus-visible + i {
   .bestiary-entry b { font-size: 0.76rem; }
   .bestiary-entry small { font-size: 0.59rem; }
   .loading-progress-wrap { width: min(calc(100% - 2.4rem), 22rem); }
+  .modal--reward { padding: 0.7rem max(0.55rem, env(safe-area-inset-right)) 0.7rem max(0.55rem, env(safe-area-inset-left)); }
+  .reward-card { padding: 0.7rem; }
+  .reward-card h2 { font-size: 1.55rem; }
+  .reward-card > p { margin-bottom: 0.65rem; font-size: 0.7rem; }
+  .reward-list { gap: 0.48rem; }
+  .reward-option { grid-template-columns: 2.45rem minmax(0, 1fr); gap: 0.5rem; min-height: 3.65rem; padding: 0.4rem 0.52rem; }
+  .reward-option > img { width: 2.45rem; height: 2.45rem; }
+  .reward-option > em { display: none; }
+  .reward-option span { align-content: center; min-height: 2.45rem; }
+  .reward-option b { font-size: 0.78rem; line-height: 1.15; }
+  .reward-option small { font-size: 0.58rem; line-height: 1.25; }
 }
 
 @media (prefers-reduced-motion: reduce) {

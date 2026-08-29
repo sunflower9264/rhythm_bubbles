@@ -18,3 +18,18 @@ test('刷新后仍将已保存的最佳分数读取为数字', () => {
     else delete (globalThis as { localStorage?: Storage }).localStorage;
   }
 });
+
+test('实时状态以 100ms 批量推进，并允许自动化强制刷新', () => {
+  const controller = new GameController(() => 0.5);
+  let updates = 0;
+  controller.subscribe(() => { updates += 1; });
+  controller.start();
+  const afterStart = updates;
+
+  controller.tick(99);
+  assert.equal(updates, afterStart);
+  controller.tick(1);
+  assert.equal(updates, afterStart + 1);
+  controller.tick(1, true);
+  assert.equal(updates, afterStart + 2);
+});

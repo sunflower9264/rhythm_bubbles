@@ -23,6 +23,12 @@ const GAME_RESOURCES = [
   'art/ui/hud-player-frame.png',
   'art/ui/hud-enemy-frame.png',
   'art/ui/board-frame.png',
+  'art/ui/reward-power.png',
+  'art/ui/reward-heart.png',
+  'art/ui/reward-shield.png',
+  'art/ui/reward-time.png',
+  'art/ui/result-defeat.png',
+  'art/ui/result-victory.png',
   'art/bubble-garden.webp',
   'art/jelly-enemy.png',
   'art/angler-enemy.png',
@@ -66,11 +72,17 @@ async function bootGame(): Promise<void> {
     parent: 'game-container',
     width: 720,
     height: 1280,
-    transparent: true,
+    transparent: false,
     antialias: true,
     render: {
-      antialiasGL: true,
-      powerPreference: 'high-performance',
+      antialiasGL: false,
+      powerPreference: 'low-power',
+    },
+    fps: {
+      target: 30,
+      limit: 30,
+      min: 20,
+      smoothStep: true,
     },
     scale: {
       mode: Phaser.Scale.FIT,
@@ -152,7 +164,7 @@ window.render_game_to_text = () => {
 
 window.advanceTime = (milliseconds: number) => {
   scene.setManualTime(true);
-  controller.tick(Math.max(0, milliseconds));
+  controller.tick(Math.max(0, milliseconds), true);
 };
 
 window.startGame = (_mode?: GameMode) => controller.start();
