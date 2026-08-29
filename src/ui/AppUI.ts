@@ -15,6 +15,17 @@ const MENU_ENEMIES = [
   { id: 'puffer', texture: 'puffer-enemy' },
 ] as const;
 
+const LOADING_TIPS = [
+  '点完全部目标泡泡，盘面就会立即刷新。',
+  '同一轮超过点击上限，会自动换上一批泡泡。',
+  '怪物开始蓄力时，留意盘面上的特殊标记。',
+  '护盾会优先抵挡怪物撞击造成的伤害。',
+  '每只海洋怪都有不同的反制方法，可以在图鉴查看。',
+  '泡泡刺豚鼓刺时，停手比猛点更有效。',
+] as const;
+
+const LOADING_BUBBLE_COUNT = 8;
+
 export class AppUI {
   private readonly root: HTMLElement;
   private settingsPausedGame = false;
@@ -30,6 +41,7 @@ export class AppUI {
   private loadingProgress = 0;
   private resourcesReady = false;
   private menuEnemyIndex = -1;
+  private readonly loadingTip = LOADING_TIPS[Math.floor(Math.random() * LOADING_TIPS.length)];
 
   constructor(private readonly controller: GameController, root: HTMLElement) {
     this.root = root;
@@ -248,8 +260,14 @@ export class AppUI {
 
   setLoadingProgress(progress: number): void {
     this.loadingProgress = Math.max(this.loadingProgress, Math.min(1, progress));
-    this.get('#loading-progress-fill').style.width = `${this.loadingProgress * 100}%`;
-    this.get('#loading-progress').setAttribute('aria-valuenow', String(Math.round(this.loadingProgress * 100)));
+    const percent = Math.round(this.loadingProgress * 100);
+    this.get('#loading-progress').setAttribute('aria-valuenow', String(percent));
+    this.text('#loading-progress-value', `${percent}%`);
+    const filledCount = Math.ceil(this.loadingProgress * LOADING_BUBBLE_COUNT);
+    this.root.querySelectorAll<HTMLElement>('.loading-progress-bubbles i').forEach((bubble, index) => {
+      bubble.classList.toggle('is-filled', index < filledCount);
+      bubble.classList.toggle('is-current', index === filledCount - 1 && percent < 100);
+    });
   }
 
   completeLoading(): void {
@@ -384,17 +402,20 @@ export class AppUI {
   private template(): string {
     return `
       <section id="loading-screen" class="loading-screen is-visible" aria-label="正在加载游戏资源" aria-live="polite">
+        <img class="loading-game-title" src="art/game-title.png" alt="泡泡侠大战海洋怪">
         <div id="loading-progress" class="loading-progress-wrap" role="progressbar" aria-label="游戏资源加载进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-          <div class="loading-progress-track liquid-meter"><i id="loading-progress-fill" class="liquid-fill"></i></div>
+          <div class="loading-progress-bubbles" aria-hidden="true">
+            ${Array.from({ length: LOADING_BUBBLE_COUNT }, () => '<i></i>').join('')}
+          </div>
+          <strong id="loading-progress-value" class="loading-progress-value">0%</strong>
+          <p class="loading-tip"><b>TIP</b><span>${this.loadingTip}</span></p>
         </div>
       </section>
 
       <section id="menu-screen" class="screen menu-screen" aria-label="主菜单">
         <header class="brand-block">
           <h1 class="game-logo" aria-label="泡泡侠大战海洋怪">
-            <span class="game-logo-row game-logo-row--top"><b class="game-logo-bubbles">泡泡</b><b class="game-logo-hero">侠</b></span>
-            <span class="game-logo-row game-logo-row--bottom"><b class="game-logo-versus">大战</b><b class="game-logo-ocean">海洋</b><b class="game-logo-monster">怪</b></span>
-            <i class="game-logo-orb game-logo-orb--one" aria-hidden="true"></i><i class="game-logo-orb game-logo-orb--two" aria-hidden="true"></i>
+            <img src="art/game-title.png" alt="">
           </h1>
         </header>
         <div class="menu-actions">

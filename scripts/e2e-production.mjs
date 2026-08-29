@@ -30,11 +30,12 @@ page.on('console', (message) => {
 
 await page.goto(`${BASE_URL}?seed=2654435761`, { waitUntil: 'domcontentloaded' });
 await page.locator('#loading-screen.is-visible').waitFor({ state: 'visible' });
-assert.equal(await page.locator('.loading-screen img, .loading-bubble-side, .loading-monster-side, .loading-impact').count(), 0,
+assert.equal(await page.locator('.loading-bubble-side, .loading-monster-side, .loading-impact').count(), 0,
   '加载页不应再使用分散的 DOM 角色拼装');
-assert.equal(await page.locator('.loading-message, .loading-progress-heading').count(), 0,
-  '加载页只保留底部进度条，不显示中央或辅助文案');
-assert.equal((await page.locator('#loading-screen').textContent())?.trim(), '');
+assert.equal(await page.locator('.loading-game-title').getAttribute('alt'), '泡泡侠大战海洋怪');
+assert.equal(await page.locator('.loading-progress-bubbles i').count(), 8, '加载进度应由多个泡泡表示');
+assert.match((await page.locator('#loading-progress-value').textContent()) ?? '', /^\d+%$/);
+assert.ok((await page.locator('.loading-tip span').textContent())?.trim(), '加载页应显示一条 Tips');
 const loadingBackground = await page.locator('#loading-screen').evaluate((element) => getComputedStyle(element).backgroundImage);
 assert.match(loadingBackground, /loading-battle-key-art\.png/, '加载页应使用独立的整张战斗原画');
 await page.evaluate(() => new Promise((resolve, reject) => {
@@ -43,8 +44,8 @@ await page.evaluate(() => new Promise((resolve, reject) => {
   image.onerror = reject;
   image.src = 'art/loading-battle-key-art.png';
 }));
-const loadingProgressBox = await page.locator('.loading-progress-track').boundingBox();
-assert.ok(loadingProgressBox && loadingProgressBox.y > 770, '药剂进度条应独立位于加载页底部');
+const loadingProgressBox = await page.locator('.loading-progress-bubbles').boundingBox();
+assert.ok(loadingProgressBox && loadingProgressBox.y > 350 && loadingProgressBox.y < 500, '泡泡进度应位于加载页中部');
 await screenshot(page, '00-loading-screen.png');
 await page.locator('#loading-screen').waitFor({ state: 'hidden' });
 await page.waitForLoadState('networkidle');
@@ -57,7 +58,8 @@ assert.equal(await page.locator('#fullscreen-button').count(), 0);
 assert.equal(await page.locator('.run-preview').count(), 0);
 assert.equal(await page.locator('.menu-hint').count(), 0);
 assert.equal(await page.locator('.tagline, .eyebrow, .mascot-badge').count(), 0, '主页不应保留补充文案和旧头像');
-assert.equal((await page.locator('.game-logo').textContent())?.replace(/\s/g, ''), '泡泡侠大战海洋怪');
+assert.equal(await page.locator('.game-logo').getAttribute('aria-label'), '泡泡侠大战海洋怪');
+assert.match((await page.locator('.game-logo img').getAttribute('src')) ?? '', /game-title\.png$/);
 assert.equal(await page.locator('#game-container canvas').getAttribute('aria-label'), '泡泡侠大战海洋怪游戏区：轻触泡泡进行游戏');
 await screenshot(page, '01-clean-menu.png');
 
