@@ -14,6 +14,11 @@ const appUI = new AppUI(controller, requireElement('ui-layer'));
 const GAME_RESOURCES = [
   'art/loading-battle-key-art.png',
   'art/game-title.png',
+  'art/ui/button-teal.png',
+  'art/ui/button-coral.png',
+  'art/ui/button-violet.png',
+  'art/ui/button-blue.png',
+  'art/ui/button-gold.png',
   'art/bubble-garden.webp',
   'art/jelly-enemy.png',
   'art/angler-enemy.png',

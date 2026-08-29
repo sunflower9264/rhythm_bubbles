@@ -61,6 +61,11 @@ assert.equal(await page.locator('.tagline, .eyebrow, .mascot-badge').count(), 0,
 assert.equal(await page.locator('.game-logo').getAttribute('aria-label'), '泡泡侠大战海洋怪');
 assert.match((await page.locator('.game-logo img').getAttribute('src')) ?? '', /game-title\.png$/);
 assert.equal(await page.locator('#game-container canvas').getAttribute('aria-label'), '泡泡侠大战海洋怪游戏区：轻触泡泡进行游戏');
+const menuButtonArt = await page.locator('.menu-actions button').evaluateAll((elements) =>
+  elements.map((element) => getComputedStyle(element).backgroundImage));
+assert.match(menuButtonArt[0], /button-teal\.png/);
+assert.match(menuButtonArt[1], /button-coral\.png/);
+assert.match(menuButtonArt[2], /button-violet\.png/);
 await screenshot(page, '01-clean-menu.png');
 
 const shellBox = await page.locator('#game-shell').boundingBox();

@@ -1449,23 +1449,21 @@ input:focus-visible + i {
 .secondary-button,
 .text-button,
 .menu-utility-button {
-  --button-top: #87ebda;
-  --button-bottom: #3eb8ac;
-  --button-edge: #278e89;
-  --button-glow: rgba(47, 159, 150, 0.28);
-  --button-text: #2f5672;
+  --button-art: url('/art/ui/button-teal.png');
   position: relative;
-  min-height: 3rem;
-  padding: 0.72rem 1rem;
-  border: 3px solid rgba(255, 255, 255, 0.94);
-  border-radius: 1.25rem 1.05rem 1.25rem 1.12rem;
-  background: linear-gradient(180deg, var(--button-top), var(--button-bottom));
-  box-shadow: inset 0 2px rgba(255, 255, 255, 0.52), inset 0 -2px rgba(54, 80, 111, 0.08), 0 7px 0 var(--button-edge), 0 13px 23px var(--button-glow);
-  color: var(--button-text);
+  min-height: 3.6rem;
+  padding: 0.82rem 3.1rem;
+  border: 0;
+  border-radius: 0;
+  appearance: none;
+  background: var(--button-art) center / 100% 100% no-repeat;
+  box-shadow: none;
+  color: #315b72;
   font-weight: 900;
-  text-shadow: 0 2px rgba(54, 80, 111, 0.16);
+  text-shadow: 0 1px rgba(255, 255, 255, 0.52);
   cursor: pointer;
-  transition: transform 150ms ease, box-shadow 150ms ease, filter 150ms ease;
+  filter: drop-shadow(0 0.42rem 0.42rem rgba(42, 91, 112, 0.2));
+  transition: transform 150ms ease, filter 150ms ease;
 }
 
 .primary-button {
@@ -1484,8 +1482,8 @@ input:focus-visible + i {
 .secondary-button:active,
 .text-button:active,
 .menu-utility-button:active {
-  transform: translateY(5px) scale(0.99);
-  box-shadow: inset 0 2px rgba(255, 255, 255, 0.44), 0 2px 0 var(--button-edge), 0 6px 12px var(--button-glow);
+  transform: translateY(4px) scale(0.985);
+  filter: brightness(0.98) drop-shadow(0 0.14rem 0.2rem rgba(42, 91, 112, 0.16));
 }
 
 .button-row {
@@ -1496,56 +1494,47 @@ input:focus-visible + i {
 }
 
 .secondary-button {
-  --button-top: #cfc3f5;
-  --button-bottom: #9279d0;
-  --button-edge: #6650a0;
-  --button-glow: rgba(102, 80, 160, 0.24);
-  --button-text: white;
-  padding: 0.7rem 0.8rem;
+  --button-art: url('/art/ui/button-violet.png');
+  padding: 0.72rem 1.4rem;
+  color: white;
+  text-shadow: 0 2px rgba(76, 48, 145, 0.34);
 }
 
 .text-button {
-  --button-top: #8ecded;
-  --button-bottom: #5d86cf;
-  --button-edge: #4663a8;
-  --button-glow: rgba(70, 99, 168, 0.23);
-  --button-text: white;
+  --button-art: url('/art/ui/button-blue.png');
   width: 100%;
   margin-top: 0.55rem;
+  color: white;
   font-size: 0.78rem;
+  text-shadow: 0 2px rgba(42, 92, 160, 0.34);
 }
 
 #restart-button,
 #gameover-restart {
-  --button-top: #ffb19e;
-  --button-bottom: #f0777d;
-  --button-edge: #c95567;
-  --button-glow: rgba(201, 85, 103, 0.26);
-  --button-text: white;
+  --button-art: url('/art/ui/button-coral.png');
+  color: white;
+  text-shadow: 0 2px rgba(166, 64, 61, 0.32);
 }
 
 #victory-restart {
-  --button-top: #ffe58c;
-  --button-bottom: #f5a661;
-  --button-edge: #cf784f;
-  --button-glow: rgba(207, 120, 79, 0.25);
+  --button-art: url('/art/ui/button-gold.png');
+  color: #805352;
 }
 
 #menu-settings,
 #pause-settings {
-  --button-top: #aebcf4;
-  --button-bottom: #7186d0;
-  --button-edge: #5064a7;
-  --button-glow: rgba(82, 103, 168, 0.27);
-  --button-text: white;
+  --button-art: url('/art/ui/button-violet.png');
+  color: white;
+  text-shadow: 0 2px rgba(76, 48, 145, 0.34);
 }
 
 #menu-bestiary {
-  --button-top: #ffe7ad;
-  --button-bottom: #f6a574;
-  --button-edge: #cf765e;
-  --button-glow: rgba(207, 118, 94, 0.24);
-  --button-text: #7a5260;
+  --button-art: url('/art/ui/button-coral.png');
+  color: #7a4554;
+}
+
+#start-game {
+  min-height: 4.2rem;
 }
 
 .result-face {
@@ -1924,7 +1913,8 @@ input:focus-visible + i {
   .mode-list { gap: 0.42rem; }
   .mode-card { min-height: 4.25rem; padding-block: 0.5rem; }
   .menu-actions { gap: 0.75rem; margin-top: 1.55rem; }
-  .menu-actions button { min-height: 2.55rem; padding-block: 0.5rem; }
+  .menu-actions button { min-height: 3.05rem; padding-block: 0.5rem; }
+  #start-game { min-height: 3.5rem; }
   .menu-encounter { height: 10.6rem; }
   .menu-featured-enemy { right: -0.6rem; width: 9.5rem; }
   .menu-bubble--leader { --bubble-size: 4.7rem; --eye-gap: 1.45rem; }
