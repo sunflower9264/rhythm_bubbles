@@ -98,3 +98,4 @@ Original prompt: 重写 Rhythm Bubbles，保持核心玩法不变，全面重做
 - 统一按钮版本已提交并推送，部署到 `http://64.83.41.39:18088`。`dist/` 与 `/var/www/rhythm-bubbles/` 完全一致，Nginx 配置校验和重载通过，公网 Service Worker 返回 `v42`。
 - Original prompt: 加载页进度条改到屏幕中间吧，不用复杂测试，部署上去
 - 将加载页药剂进度条从底部安全区改为屏幕水平和垂直几何居中，紧凑屏幕只缩小水平留白，不改原画、进度逻辑或其他页面。Service Worker 更新为 `v43`；生产构建和 `git diff --check` 通过，390×844 Chromium 截图 `output/e2e/v43-loading-centered.png` 已目视检查，进度条中心 `Y=422` 与屏幕中心完全一致。按用户要求未运行完整五战回归。
+- 进度条居中版本已提交并推送，部署到 `http://64.83.41.39:18088`。`dist/` 与 `/var/www/rhythm-bubbles/` 完全一致，Nginx 配置校验和重载通过，公网 Service Worker 返回 `v43`。
