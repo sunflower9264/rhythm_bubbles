@@ -151,3 +151,4 @@ Original prompt: 重写 Rhythm Bubbles，保持核心玩法不变，全面重做
 - 重做三层原创战斗音效并保留现有触发语义：`tap.wav` 改为短促的薄膜破裂、压力释放和水滴回弹；三组 `correct-pop` 改为错开点击瞬态的双音水晶上扬确认；`enemy-attack.wav` 改为水压低频、手机可还原的中频软体撞击、泡沫噪声和散落小泡泡组成的水下重击。生成脚本增加确定性滑音、滤波噪声和泡泡破裂合成器，Service Worker 准备更新为 `v55`。
 - 为浏览器验收增加最近 SFX 触发记录与 WAV 时长检查，明确验证真实触控依次播放 `tap → correct-pop → enemy-hit`，怪物撞屏最后播放 `enemy-attack`。26 项逻辑测试、生产构建、依赖审计与 `git diff --check` 已通过；项目内 Playwright 客户端已完成点击动作、状态采集、战斗截图和控制台检查，仓库 Skill 原脚本因自身目录无法解析项目 Playwright 依赖而改用项目内同版客户端。
 - 本地 Chromium 完整五战流程通过，涵盖随机五怪机制、真实触控音效顺序、水下怪物撞击音效、护盾、胜利、设置与响应式布局；已目视检查正确戳泡泡与怪物撞屏帧，画面反馈未因音效改动发生回归。
+- 新战斗音效已提交并推送，以 Service Worker `v55` 部署到 `http://64.83.41.39:18088`。`dist/` 与 `/var/www/rhythm-bubbles/` 完全一致，Nginx 配置校验和重载通过，公网 5 个 WAV 的 SHA-256 与本地产物逐一一致；公网真实触控记录为 `tap → correct-pop-1 → enemy-hit`，怪物蓄力/撞屏记录为 `countdown → enemy-attack`，控制台无错误。
