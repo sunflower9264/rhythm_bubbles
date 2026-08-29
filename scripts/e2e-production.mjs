@@ -358,6 +358,7 @@ let sawBattle5SingleHit = false;
 let sawComboImpact = false;
 let sawShieldBreak = false;
 let sawBattleToast = false;
+let sawHazardTargetCorrect = false;
 let primedCombo = false;
 let sawCompactRewardLayout = false;
 for (let guard = 0; guard < 1400; guard += 1) {
@@ -428,6 +429,22 @@ for (let guard = 0; guard < 1400; guard += 1) {
     }
     if (state.battle.enemy.mechanic === 'guard') {
       await page.evaluate(() => window.advanceTime(900));
+      continue;
+    }
+    const hazardTarget = state.bubbles.find((bubble) => bubble.isTarget && !bubble.cleared
+      && bubble.row === state.battle.enemy.hazardRow);
+    if (hazardTarget && !sawHazardTargetCorrect) {
+      const hpBefore = state.battle.player.hp;
+      const mistakesBefore = state.battle.player.mistakes;
+      await tapBubble(page, state, hazardTarget.index);
+      state = await readState(page);
+      assert.equal(state.bubbles[hazardTarget.index].cleared, true,
+        '扫线覆盖的可见目标泡泡应通过真实触控正常清除');
+      assert.equal(state.battle.player.hp, hpBefore, '正确目标不应被扫线误判并扣血');
+      assert.equal(state.battle.player.mistakes, mistakesBefore, '正确目标不应累计失误');
+      assert.equal(state.battle.enemy.mechanicState, 'active', '危险行目标不应直接解除扫线');
+      await screenshot(page, '06-manta-hazard-target-correct.png');
+      sawHazardTargetCorrect = true;
       continue;
     }
     const safeTarget = state.bubbles.find((bubble) => bubble.isTarget && !bubble.cleared && bubble.row !== state.battle.enemy.hazardRow);
@@ -557,6 +574,7 @@ assert.ok(sawBattle5SingleHit);
 assert.ok(sawComboImpact);
 assert.ok(sawShieldBreak);
 assert.ok(sawBattleToast);
+assert.ok(sawHazardTargetCorrect);
 assert.ok(sawCompactRewardLayout);
 await page.locator('#victory-modal.is-visible').waitFor();
 await screenshot(page, '09-victory.png');

@@ -190,7 +190,7 @@ export class GameSession {
       return this.finishBubbleTap('counter-miss', index);
     }
     if (this.enemyMechanicState === 'active' && mechanic === 'sweep'
-      && bubble.row === this.enemyHazardRow) {
+      && bubble.row === this.enemyHazardRow && !bubble.isTarget) {
       this.resetCombo();
       this.mistakeCount += 1;
       this.applyPlayerDamage(Math.ceil(enemy.attack * 0.6));
@@ -231,7 +231,7 @@ export class GameSession {
       const reduction = (this.combo > 1 ? COMBO_ATTACK_REDUCTION : 0)
         + (this.getRemainingTargets() === 0 ? BOARD_CLEAR_ATTACK_REDUCTION : 0);
       this.lastAttackReduction = this.weakenEnemyAttack(reduction);
-      if (mechanic === 'sweep' && this.enemyMechanicState === 'active') {
+      if (mechanic === 'sweep' && this.enemyMechanicState === 'active' && bubble.row !== this.enemyHazardRow) {
         this.resetEnemyMechanic();
         counterEffect = 'enemy-countered';
       }

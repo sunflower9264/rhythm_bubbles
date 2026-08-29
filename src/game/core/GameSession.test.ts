@@ -211,7 +211,8 @@ test('星翼魔鬼鱼危险行会反伤，安全行正确泡泡可打断扫线',
   const risky = sessionStartingWith('manta');
   let update = reachFirstIntent(risky.session, risky.update);
   assert.notEqual(update.snapshot.enemyHazardRow, null);
-  const hazard = update.snapshot.bubbles.find((bubble) => !bubble.cleared && bubble.row === update.snapshot.enemyHazardRow)!;
+  const hazard = update.snapshot.bubbles.find((bubble) => !bubble.isTarget
+    && !bubble.cleared && bubble.row === update.snapshot.enemyHazardRow)!;
   const hp = update.snapshot.playerHp;
   update = risky.session.select(hazard.index);
   assert.equal(update.effect, 'counter-miss');
@@ -224,6 +225,22 @@ test('星翼魔鬼鱼危险行会反伤，安全行正确泡泡可打断扫线',
   assert.equal(update.effect, 'enemy-countered');
   assert.equal(update.snapshot.enemyMechanicState, 'inactive');
   assert.equal(update.snapshot.enemyAttackState, 'charging');
+});
+
+test('星翼魔鬼鱼扫线覆盖的可见目标仍应按正确泡泡处理', () => {
+  const session = new GameSession(createSeededRandom(10));
+  const initial = session.start();
+  assert.equal(initial.snapshot.enemyId, 'manta');
+  const visibleTarget = initial.snapshot.bubbles.find((bubble) => bubble.isTarget
+    && !bubble.cleared && bubble.row === initial.snapshot.enemyHazardRow);
+  assert.ok(visibleTarget);
+  assert.ok(initial.snapshot.visibleTargetIndices.includes(visibleTarget.index));
+
+  const update = session.select(visibleTarget.index);
+  assert.equal(update.effect, 'correct');
+  assert.equal(update.snapshot.bubbles[visibleTarget.index].cleared, true);
+  assert.equal(update.snapshot.mistakeCount, 0);
+  assert.equal(update.snapshot.enemyMechanicState, 'active');
 });
 
 test('泡泡刺豚蓄刺时必须停手，忍过蓄刺后暴露弱点且半血加速', () => {
