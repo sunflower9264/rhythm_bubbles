@@ -35,7 +35,7 @@ assert.equal(await page.locator('.loading-bubble-side, .loading-monster-side, .l
 assert.equal(await page.locator('.loading-game-title').getAttribute('alt'), '泡泡侠大战海洋怪');
 assert.equal(await page.locator('.loading-progress-bubbles i').count(), 8, '加载进度应由多个泡泡表示');
 assert.match((await page.locator('#loading-progress-value').textContent()) ?? '', /^\d+%$/);
-assert.ok((await page.locator('.loading-tip span').textContent())?.trim(), '加载页应显示一条 Tips');
+assert.equal(await page.locator('.loading-tip').count(), 0, '加载页不再显示 Tips');
 const loadingBackground = await page.locator('#loading-screen').evaluate((element) => getComputedStyle(element).backgroundImage);
 assert.match(loadingBackground, /loading-battle-key-art\.png/, '加载页应使用独立的整张战斗原画');
 await page.evaluate(() => new Promise((resolve, reject) => {
@@ -46,6 +46,10 @@ await page.evaluate(() => new Promise((resolve, reject) => {
 }));
 const loadingProgressBox = await page.locator('.loading-progress-bubbles').boundingBox();
 assert.ok(loadingProgressBox && loadingProgressBox.y > 350 && loadingProgressBox.y < 500, '泡泡进度应位于加载页中部');
+const loadingPercentBox = await page.locator('#loading-progress-value').boundingBox();
+assert.ok(loadingProgressBox && loadingPercentBox
+  && Math.abs((loadingPercentBox.x + loadingPercentBox.width / 2) - (loadingProgressBox.x + loadingProgressBox.width / 2)) < 2,
+  '百分比应在泡泡进度正下方居中');
 await screenshot(page, '00-loading-screen.png');
 await page.locator('#loading-screen').waitFor({ state: 'hidden' });
 await page.waitForLoadState('networkidle');

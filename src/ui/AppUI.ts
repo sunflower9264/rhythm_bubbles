@@ -15,15 +15,6 @@ const MENU_ENEMIES = [
   { id: 'puffer', texture: 'puffer-enemy' },
 ] as const;
 
-const LOADING_TIPS = [
-  '点完全部目标泡泡，盘面就会立即刷新。',
-  '同一轮超过点击上限，会自动换上一批泡泡。',
-  '怪物开始蓄力时，留意盘面上的特殊标记。',
-  '护盾会优先抵挡怪物撞击造成的伤害。',
-  '每只海洋怪都有不同的反制方法，可以在图鉴查看。',
-  '泡泡刺豚鼓刺时，停手比猛点更有效。',
-] as const;
-
 const LOADING_BUBBLE_COUNT = 8;
 
 export class AppUI {
@@ -41,7 +32,6 @@ export class AppUI {
   private loadingProgress = 0;
   private resourcesReady = false;
   private menuEnemyIndex = -1;
-  private readonly loadingTip = LOADING_TIPS[Math.floor(Math.random() * LOADING_TIPS.length)];
 
   constructor(private readonly controller: GameController, root: HTMLElement) {
     this.root = root;
@@ -408,7 +398,6 @@ export class AppUI {
             ${Array.from({ length: LOADING_BUBBLE_COUNT }, () => '<i></i>').join('')}
           </div>
           <strong id="loading-progress-value" class="loading-progress-value">0%</strong>
-          <p class="loading-tip"><b>TIP</b><span>${this.loadingTip}</span></p>
         </div>
       </section>
 
