@@ -1,6 +1,6 @@
 import { BATTLE_STATS, createEnemyOrder, ENEMY_ARCHETYPES, getEnemyArchetype } from './enemies';
-import { createBubbles, createLevelConfig, createSeededRandom, type RandomSource } from './level';
-import type { BubbleState, EnemyAttackState, EnemyId, EnemyMechanicState, GameMode, GamePhase, RewardChoice, RewardId, SessionSnapshot, SessionUpdate } from './types';
+import { BOARD_COLS, BOARD_ROWS, createBubbles, createLevelConfig, createSeededRandom, type RandomSource } from './level';
+import type { BubbleState, EnemyAttackState, EnemyId, EnemyMechanicState, GamePhase, RewardChoice, RewardId, SessionSnapshot, SessionUpdate } from './types';
 
 const NEXT_BOARD_MS = 420;
 const RESULT_TRANSITION_MS = 800;
@@ -25,17 +25,12 @@ type TransitionTarget = 'next-board' | 'reward' | 'victory';
 export class GameSession {
   private phase: GamePhase = 'menu';
   private previousPhase: GamePhase | null = null;
-  private mode: GameMode | null = null;
   private score = 0;
   private level = 1;
   private bubbles: BubbleState[] = [];
-  private remainingTimeMs = 0;
-  private timeLimitMs = 0;
   private lastTargetCount = 0;
-  private previewElapsedMs = 0;
   private transitionElapsedMs = 0;
   private transitionTarget: TransitionTarget = 'next-board';
-  private sequenceCursor = 0;
   private lastSelectedIndex: number | null = null;
   private boardTapCount = 0;
   private battle = 1;
@@ -67,7 +62,6 @@ export class GameSession {
   constructor(private readonly random: RandomSource = createSeededRandom()) {}
 
   start(): SessionUpdate {
-    this.mode = 'classic';
     this.score = 0;
     this.level = 1;
     this.battle = 1;
@@ -92,9 +86,7 @@ export class GameSession {
   home(): SessionUpdate {
     this.phase = 'menu';
     this.previousPhase = null;
-    this.mode = null;
     this.bubbles = [];
-    this.remainingTimeMs = 0;
     return this.update('home');
   }
 
@@ -115,7 +107,7 @@ export class GameSession {
   }
 
   pause(): SessionUpdate {
-    if (!['playing', 'preview', 'transition'].includes(this.phase)) return this.update('none');
+    if (!['playing', 'transition'].includes(this.phase)) return this.update('none');
     this.previousPhase = this.phase;
     this.phase = 'paused';
     return this.update('pause');
@@ -207,7 +199,7 @@ export class GameSession {
       return this.finishBubbleTap('counter-miss', index);
     }
 
-    const correct = this.mode === 'sequence' ? index === this.getExpectedIndex() : bubble.isTarget;
+    const correct = bubble.isTarget;
     if (!correct) {
       this.resetCombo();
       this.mistakeCount += 1;
@@ -230,8 +222,6 @@ export class GameSession {
       (this.attackPower + Math.min(3, this.combo - 1)) * staggerMultiplier * armorMultiplier,
     ));
     this.enemyHp = Math.max(0, this.enemyHp - this.lastDamage);
-    if (this.mode === 'sequence' && bubble.cleared) this.sequenceCursor += 1;
-
     let counterEffect: SessionUpdate['effect'] | null = null;
     if (this.enemyHp === 0) {
       this.resetEnemyAttack();
@@ -271,12 +261,7 @@ export class GameSession {
       const step = Math.min(remaining, 50);
       remaining -= step;
 
-      if (this.phase === 'preview') {
-        this.previewElapsedMs += step;
-        if (this.previewElapsedMs >= this.getPreviewDurationMs()) {
-          this.phase = 'playing';
-        }
-      } else if (this.phase === 'playing') {
+      if (this.phase === 'playing') {
         if (this.combo > 0) {
           this.comboElapsedMs += step;
           if (this.comboElapsedMs >= COMBO_WINDOW_MS) this.resetCombo();
@@ -312,27 +297,19 @@ export class GameSession {
   }
 
   getSnapshot(): SessionSnapshot {
-    const config = this.currentConfig();
     const enemy = this.currentEnemy();
     return {
       phase: this.phase,
       previousPhase: this.previousPhase,
-      mode: this.mode,
       score: this.score,
       level: this.level,
-      rows: config?.rows ?? 0,
-      cols: config?.cols ?? 0,
-      remainingTimeMs: this.remainingTimeMs,
-      timeLimitMs: this.timeLimitMs,
+      rows: this.bubbles.length > 0 ? BOARD_ROWS : 0,
+      cols: this.bubbles.length > 0 ? BOARD_COLS : 0,
       remainingTargets: this.getRemainingTargets(),
       targetCount: this.lastTargetCount,
       bubbles: this.bubbles.map((bubble) => ({ ...bubble })),
       visibleTargetIndices: this.getVisibleTargetIndices(),
-      expectedIndex: this.getExpectedIndex(),
       lastSelectedIndex: this.lastSelectedIndex,
-      previewProgress: this.phase === 'preview'
-        ? Math.min(1, this.previewElapsedMs / this.getPreviewDurationMs())
-        : 1,
       battle: this.battle,
       board: this.board,
       boardTapCount: this.boardTapCount,
@@ -378,7 +355,6 @@ export class GameSession {
   }
 
   private loadBattle(): void {
-    this.mode = this.battle === 1 ? 'classic' : this.battle === 2 ? 'memory' : 'sequence';
     const enemy = this.currentEnemy();
     this.enemyHp = enemy.maxHp;
     this.resetCombo();
@@ -395,21 +371,16 @@ export class GameSession {
   }
 
   private loadBoard(): void {
-    if (!this.mode) return;
     this.board += 1;
-    const config = createLevelConfig(this.mode, this.battle, this.lastTargetCount, this.random);
+    const config = createLevelConfig(this.battle, this.lastTargetCount, this.random);
     this.bubbles = createBubbles(config, this.random);
     this.lastTargetCount = config.targetCount;
-    this.timeLimitMs = 0;
-    this.remainingTimeMs = 0;
-    this.previewElapsedMs = 0;
     this.transitionElapsedMs = 0;
-    this.sequenceCursor = 0;
     this.lastSelectedIndex = null;
     this.boardTapCount = 0;
     this.mistakeCount = 0;
     this.lastAttackReduction = 0;
-    this.phase = this.mode === 'classic' ? 'playing' : 'preview';
+    this.phase = 'playing';
     this.activateEnemyMechanic();
   }
 
@@ -535,41 +506,9 @@ export class GameSession {
     return Math.max(5, Math.ceil(this.currentEnemy().attack * 0.4));
   }
 
-  private currentConfig() {
-    if (!this.mode || this.bubbles.length === 0) return null;
-    const rows = 4;
-    const cols = 4;
-    return {
-      rows,
-      cols,
-      flashCount: 1,
-      flashDurationMs: 900,
-      sequenceIntervalMs: 300,
-      timeLimitMs: 0,
-    };
-  }
-
-  private getPreviewDurationMs(): number {
-    const config = this.currentConfig();
-    if (!config || this.mode === 'classic') return 0;
-    if (this.mode === 'memory') return config.flashCount * config.flashDurationMs;
-    return (this.lastTargetCount + 1) * config.sequenceIntervalMs;
-  }
-
   private getVisibleTargetIndices(): number[] {
     const remainingTargets = this.bubbles.filter((bubble) => bubble.isTarget && !bubble.cleared);
-    if (this.mode === 'classic' && this.phase !== 'menu') return remainingTargets.map(({ index }) => index);
-    if (this.phase !== 'preview') return [];
-
-    return this.bubbles
-      .filter((bubble) => bubble.isTarget && bubble.order !== null)
-      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-      .map(({ index }) => index);
-  }
-
-  private getExpectedIndex(): number | null {
-    if (this.mode !== 'sequence') return null;
-    return this.bubbles.find((bubble) => bubble.order === this.sequenceCursor)?.index ?? null;
+    return this.phase === 'menu' ? [] : remainingTargets.map(({ index }) => index);
   }
 
   private getExpectedIntentIndex(): number | null {
@@ -607,13 +546,9 @@ export class GameSession {
       this.enemyPoise = this.enemyIntentTargets.length;
     } else if (enemy.mechanic === 'sweep') {
       const remainingTargets = this.bubbles.filter((bubble) => bubble.isTarget && !bubble.cleared);
-      const expectedTarget = this.mode === 'sequence'
-        ? remainingTargets.find((bubble) => bubble.index === this.getExpectedIndex())
-        : null;
-      const rowOffset = (this.board + this.battle) % Math.max(1, this.currentConfig()?.rows ?? 1);
-      const rows = Array.from({ length: this.currentConfig()?.rows ?? 1 }, (_, index) => (rowOffset + index) % (this.currentConfig()?.rows ?? 1));
-      this.enemyHazardRow = rows.find((row) => row !== expectedTarget?.row
-        && remainingTargets.some((bubble) => bubble.row !== row)) ?? rows[0] ?? 0;
+      const rowOffset = (this.board + this.battle) % BOARD_ROWS;
+      const rows = Array.from({ length: BOARD_ROWS }, (_, index) => (rowOffset + index) % BOARD_ROWS);
+      this.enemyHazardRow = rows.find((row) => remainingTargets.some((bubble) => bubble.row !== row)) ?? rows[0] ?? 0;
     }
 
     this.enemyMechanicState = 'active';

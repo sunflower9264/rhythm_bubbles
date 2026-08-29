@@ -6,10 +6,9 @@ import type { EnemyId, RewardId, SessionUpdate } from './types';
 
 const fixedRandom = () => 0;
 
-test('单一入口从寻光开始，且保留 +10 与连击伤害', () => {
+test('单一入口直接进入目标点击，且保留 +10 与连击伤害', () => {
   const session = new GameSession(fixedRandom);
   const start = session.start();
-  assert.equal(start.snapshot.mode, 'classic');
   assert.equal(start.snapshot.battle, 1);
   assert.equal(start.snapshot.phase, 'playing');
   assert.equal(start.snapshot.attackPower, 8);
@@ -38,18 +37,15 @@ test('五战生命与点错成本形成递增但宽容的曲线', () => {
   }
 });
 
-test('五战自动按寻光、记忆和旋律推进，后续不再叠加新模式', () => {
+test('五战均直接进入目标点击状态', () => {
   const session = new GameSession(fixedRandom);
-  let update = playUntilBattle(session, 2);
-  assert.equal(update.snapshot.mode, 'memory');
-  assert.equal(update.snapshot.phase, 'preview');
-
-  update = playUntilBattle(session, 3, update);
-  assert.equal(update.snapshot.mode, 'sequence');
-  update = playUntilBattle(session, 4, update);
-  assert.equal(update.snapshot.mode, 'sequence');
-  update = playUntilBattle(session, 5, update);
-  assert.equal(update.snapshot.mode, 'sequence');
+  let update = session.start();
+  for (let battle = 1; battle <= 5; battle += 1) {
+    if (battle > 1) update = playUntilBattle(session, battle, update);
+    assert.equal(update.snapshot.phase, 'playing');
+    const targets = update.snapshot.bubbles.filter((bubble) => bubble.isTarget && !bubble.cleared).map((bubble) => bubble.index);
+    assert.deepEqual(update.snapshot.visibleTargetIndices, targets);
+  }
 });
 
 test('所有战斗的泡泡盘面固定为 4x4', () => {
@@ -63,30 +59,16 @@ test('所有战斗的泡泡盘面固定为 4x4', () => {
   }
 });
 
-test('记忆目标只统一显示一次，旋律顺序也统一显示后再隐藏', () => {
-  const memorySession = new GameSession(fixedRandom);
-  let update = playUntilBattle(memorySession, 2);
-  const memoryTargets = update.snapshot.bubbles.filter((bubble) => bubble.isTarget).map((bubble) => bubble.index);
-  assert.deepEqual(update.snapshot.visibleTargetIndices, memoryTargets);
-  update = memorySession.advanceTime(899);
-  assert.equal(update.snapshot.phase, 'preview');
-  assert.deepEqual(update.snapshot.visibleTargetIndices, memoryTargets);
-  update = memorySession.advanceTime(1);
-  assert.equal(update.snapshot.phase, 'playing');
-  assert.deepEqual(update.snapshot.visibleTargetIndices, []);
-
-  const sequenceSession = new GameSession(fixedRandom);
-  update = playUntilBattle(sequenceSession, 3);
-  const orderedTargets = update.snapshot.bubbles
-    .filter((bubble) => bubble.isTarget)
-    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-    .map((bubble) => bubble.index);
-  assert.deepEqual(update.snapshot.visibleTargetIndices, orderedTargets);
-  update = sequenceSession.advanceTime(300);
-  assert.deepEqual(update.snapshot.visibleTargetIndices, orderedTargets);
-  update = sequenceSession.advanceTime(update.snapshot.targetCount * 300);
-  assert.equal(update.snapshot.phase, 'playing');
-  assert.deepEqual(update.snapshot.visibleTargetIndices, []);
+test('目标泡泡持续显示且可按任意顺序点击', () => {
+  const session = new GameSession(fixedRandom);
+  let update = playUntilBattle(session, 3);
+  if (update.snapshot.enemyMechanicState === 'active') update = resolveActiveMechanic(session, update);
+  const targets = update.snapshot.bubbles.filter((bubble) => bubble.isTarget && !bubble.cleared);
+  const selected = targets.at(-1);
+  assert.ok(selected);
+  update = session.select(selected.index);
+  assert.equal(update.snapshot.bubbles[selected.index].cleared, true);
+  assert.equal(update.snapshot.visibleTargetIndices.includes(selected.index), false);
 });
 
 test('五只怪物每局随机且无重复，首怪不固定', () => {
@@ -174,16 +156,12 @@ test('半血后吞噬升级为三个标记', () => {
   for (let guard = 0; guard < 80 && update.snapshot.enemyHp > update.snapshot.maxEnemyHp / 2; guard += 1) {
     if (update.snapshot.phase === 'transition') update = session.advanceTime(420);
     else if (update.snapshot.phase === 'playing') {
-      const target = update.snapshot.mode === 'sequence'
-        ? update.snapshot.expectedIndex
-        : update.snapshot.bubbles.find((bubble) => bubble.isTarget && !bubble.cleared)?.index;
+      const target = update.snapshot.bubbles.find((bubble) => bubble.isTarget && !bubble.cleared)?.index;
       if (target === null || target === undefined) update = session.advanceTime(50);
       else update = session.select(target);
-    } else if (update.snapshot.phase === 'preview') update = finishPreview(session, update);
-    else break;
+    } else break;
   }
   if (update.snapshot.phase === 'transition') update = session.advanceTime(420);
-  if (update.snapshot.phase === 'preview') update = finishPreview(session, update);
   const halfHealthBoard = update.snapshot.board;
   for (let guard = 0; guard < 20 && update.snapshot.board === halfHealthBoard; guard += 1) {
     update = playOneStep(session, update);
@@ -272,34 +250,33 @@ test('泡泡刺豚蓄刺时必须停手，忍过蓄刺后暴露弱点且半血�
   assert.ok(update.snapshot.enemyAttackCooldownMs < cooldownAtFullHp);
 });
 
-test('第 4、5 战的旋律泡泡均一次点击清除', () => {
+test('第 4、5 战的目标泡泡均一次点击清除', () => {
   for (const battle of [4, 5]) {
     const session = new GameSession(fixedRandom);
-    let update = finishPreview(session, playUntilBattle(session, battle));
+    let update = playUntilBattle(session, battle);
     if (update.snapshot.enemyMechanicState === 'active') update = resolveActiveMechanic(session, update);
-    const expected = update.snapshot.expectedIndex!;
-    update = session.select(expected);
-    assert.equal(update.snapshot.bubbles[expected].cleared, true, `battle ${battle}`);
-    assert.notEqual(update.snapshot.expectedIndex, expected, `battle ${battle}`);
+    const target = update.snapshot.bubbles.find((bubble) => bubble.isTarget && !bubble.cleared);
+    assert.ok(target);
+    update = session.select(target.index);
+    assert.equal(update.snapshot.bubbles[target.index].cleared, true, `battle ${battle}`);
   }
 });
 
-test('普通连击削减 0.5% 蓄力，连击清盘合计削减 1%', () => {
+test('连击清盘合计削减 1% 蓄力', () => {
   const session = new GameSession(fixedRandom);
-  let update = finishPreview(session, playUntilBattle(session, 3));
+  let update = playUntilBattle(session, 3);
+  if (update.snapshot.enemyMechanicState === 'active') update = resolveActiveMechanic(session, update);
   update = session.advanceTime(update.snapshot.enemyAttackCooldownMs * 0.5);
-
-  update = session.select(update.snapshot.expectedIndex!);
+  const targets = update.snapshot.bubbles.filter((bubble) => bubble.isTarget && !bubble.cleared);
+  update = session.select(targets[0].index);
   assert.equal(update.snapshot.lastAttackReduction, 0);
-  update = session.select(update.snapshot.expectedIndex!);
-  assert.ok(Math.abs(update.snapshot.lastAttackReduction - 0.005) < 0.0001);
-  update = session.select(update.snapshot.expectedIndex!);
+  update = session.select(targets[1].index);
   assert.ok(Math.abs(update.snapshot.lastAttackReduction - 0.01) < 0.0001);
 });
 
 test('约每秒 7 次的快速点击仍会让怪物蓄满撞屏攻击', () => {
   const session = new GameSession(fixedRandom);
-  let update = finishPreview(session, playUntilBattle(session, 3));
+  let update = playUntilBattle(session, 3);
 
   for (let guard = 0; guard < 80 && update.snapshot.enemyAttackState !== 'windup'; guard += 1) {
     update = session.advanceTime(140);
@@ -365,30 +342,25 @@ test('未清除泡泡的点击达到目标数 +3 时保留本次失误并更换�
   assert.equal(update.snapshot.boardTapLimit, update.snapshot.targetCount + 3);
 });
 
-test('取消盘面倒计时后，时间推进只会驱动怪物行动', () => {
+test('时间推进只驱动怪物行动，不会刷新泡泡盘面', () => {
   const { session, update: start } = sessionStartingWith('angler');
   const initialBoard = start.snapshot.board;
-  assert.equal(start.snapshot.remainingTimeMs, 0);
-  assert.equal(start.snapshot.timeLimitMs, 0);
 
   const update = session.advanceTime(8000);
   assert.equal(update.snapshot.phase, 'playing');
   assert.equal(update.snapshot.board, initialBoard);
   assert.equal(update.snapshot.playerHp, 90);
-  assert.equal(update.snapshot.remainingTimeMs, 0);
-  assert.equal(update.snapshot.timeLimitMs, 0);
 });
 
-test('预览、暂停和奖励阶段都冻结怪物行动', () => {
+test('暂停和奖励阶段都冻结怪物行动', () => {
   const session = new GameSession(fixedRandom);
   let update = playUntilBattle(session, 2);
-  assert.equal(update.snapshot.phase, 'preview');
+  const progressBeforePause = update.snapshot.enemyAttackProgress;
   session.pause();
   session.advanceTime(5000);
   update = session.resume();
-  assert.equal(update.snapshot.phase, 'preview');
-  assert.equal(update.snapshot.previewProgress, 0);
-  assert.equal(update.snapshot.enemyAttackProgress, 0);
+  assert.equal(update.snapshot.phase, 'playing');
+  assert.equal(update.snapshot.enemyAttackProgress, progressBeforePause);
 
   update = playUntilPhase(session, update, 'reward');
   const progress = update.snapshot.enemyAttackProgress;
@@ -416,7 +388,6 @@ test('原加时奖励改为只恢复 14 点生命', () => {
   const session = new GameSession(fixedRandom);
   let update = playUntilPhase(session, session.start(), 'reward');
   update = session.selectReward(0);
-  update = finishPreview(session, update);
   const wrong = update.snapshot.bubbles.find((bubble) => !bubble.isTarget)!;
   update = session.select(wrong.index);
   update = playUntilPhase(session, update, 'reward');
@@ -427,7 +398,6 @@ test('原加时奖励改为只恢复 14 点生命', () => {
   const hpBeforeReward = update.snapshot.playerHp;
   update = session.selectReward(rewardIndex);
   assert.equal(update.snapshot.playerHp, Math.min(update.snapshot.maxPlayerHp, hpBeforeReward + 14));
-  assert.equal(update.snapshot.timeLimitMs, 0);
 });
 
 test('五战防御奖励路线在多个随机种子下可通关', () => {
@@ -450,8 +420,7 @@ function sessionStartingWith(enemyId: EnemyId, seedOffset = 0): { session: GameS
 }
 
 function reachFirstIntent(session: GameSession, initial?: SessionUpdate): SessionUpdate {
-  let update = initial ?? session.start();
-  update = finishPreview(session, update);
+  const update = initial ?? session.start();
   assert.equal(update.snapshot.enemyMechanicState, 'active');
   return update;
 }
@@ -473,9 +442,7 @@ function resolveActiveMechanic(session: GameSession, initial: SessionUpdate): Se
     if (snapshot.enemyMechanic === 'guard') {
       update = session.advanceTime(900);
     } else if (snapshot.enemyMechanic === 'sweep') {
-      const target = snapshot.mode === 'sequence'
-        ? snapshot.bubbles[snapshot.expectedIndex!]
-        : snapshot.bubbles.find((bubble) => bubble.isTarget && !bubble.cleared && bubble.row !== snapshot.enemyHazardRow);
+      const target = snapshot.bubbles.find((bubble) => bubble.isTarget && !bubble.cleared && bubble.row !== snapshot.enemyHazardRow);
       assert.ok(target && target.row !== snapshot.enemyHazardRow);
       update = session.select(target.index);
     } else {
@@ -487,15 +454,8 @@ function resolveActiveMechanic(session: GameSession, initial: SessionUpdate): Se
   return update;
 }
 
-function finishPreview(session: GameSession, update: SessionUpdate): SessionUpdate {
-  if (update.snapshot.phase !== 'preview') return update;
-  const duration = update.snapshot.mode === 'memory' ? 900 : (update.snapshot.targetCount + 1) * 300;
-  return session.advanceTime(duration);
-}
-
 function playOneStep(session: GameSession, update: SessionUpdate, preferredReward: RewardId = 'power'): SessionUpdate {
   const snapshot = update.snapshot;
-  if (snapshot.phase === 'preview') return finishPreview(session, update);
   if (snapshot.phase === 'transition') return session.advanceTime(snapshot.enemyHp === 0 ? 800 : 420);
   if (snapshot.phase === 'reward') {
     const preferred = snapshot.rewardChoices.findIndex((reward) => reward.id === preferredReward);
@@ -504,9 +464,7 @@ function playOneStep(session: GameSession, update: SessionUpdate, preferredRewar
   if (snapshot.phase !== 'playing') return update;
   if (snapshot.enemyMechanicState === 'active') return resolveActiveMechanic(session, update);
   if (snapshot.enemyAttackState === 'windup') return session.advanceTime(snapshot.enemyAttackWindupMs);
-  const target = snapshot.mode === 'sequence'
-    ? snapshot.expectedIndex
-    : snapshot.bubbles.find((bubble) => bubble.isTarget && !bubble.cleared)?.index;
+  const target = snapshot.bubbles.find((bubble) => bubble.isTarget && !bubble.cleared)?.index;
   assert.notEqual(target, null);
   assert.notEqual(target, undefined);
   return session.select(target!);

@@ -78,7 +78,7 @@ const result = {
 console.log(JSON.stringify(result, null, 2));
 
 if (ASSERT_BUDGET) {
-  assert.ok(result.renderDrawCallsPerSecond <= 70, '移动端 WebGL 提交频率应限制在 30 FPS 预算附近');
+  assert.ok(result.renderDrawCallsPerSecond <= 260, '移动端 WebGL 提交频率应限制在 120 FPS 预算附近');
   assert.ok(result.uiMutationsPerSecond <= 12, '静置战斗不应持续全量改写 DOM HUD');
 }
 

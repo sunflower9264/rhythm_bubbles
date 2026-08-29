@@ -1,7 +1,9 @@
-import type { BubbleState, GameMode, LevelConfig } from './types';
+import type { BubbleState, LevelConfig } from './types';
 
 const MAX_TARGETS = 8;
 const INITIAL_TARGETS = 2;
+export const BOARD_ROWS = 4;
+export const BOARD_COLS = 4;
 
 export type RandomSource = () => number;
 
@@ -16,29 +18,19 @@ export function createSeededRandom(seed = Date.now()): RandomSource {
 }
 
 export function createLevelConfig(
-  mode: GameMode,
   level: number,
   lastTargetCount: number,
   random: RandomSource,
 ): LevelConfig {
-  const rows = 4;
-  const cols = 4;
   const minTargets = Math.min(INITIAL_TARGETS + Math.floor((level - 1) / 2), MAX_TARGETS);
   const maxTargets = Math.min(minTargets + 1 + Math.floor(level / 3), MAX_TARGETS);
   const effectiveMin = Math.min(Math.max(minTargets, lastTargetCount), maxTargets);
   const targetCount = effectiveMin + Math.floor(random() * (maxTargets - effectiveMin + 1));
-  const extraSeconds = mode === 'classic' ? 3 : 5;
-
   return {
     level,
-    mode,
-    rows,
-    cols,
+    rows: BOARD_ROWS,
+    cols: BOARD_COLS,
     targetCount,
-    timeLimitMs: (targetCount * 2 + extraSeconds) * 1000,
-    flashCount: 1,
-    flashDurationMs: 900,
-    sequenceIntervalMs: 300,
   };
 }
 
@@ -53,16 +45,14 @@ export function createBubbles(config: LevelConfig, random: RandomSource): Bubble
     targetIndices.push(index);
   }
 
-  const orderByIndex = new Map(targetIndices.map((index, order) => [index, order]));
+  const targets = new Set(targetIndices);
   return Array.from({ length: total }, (_, index) => {
-    const order = orderByIndex.get(index) ?? null;
     return {
       index,
       row: Math.floor(index / config.cols),
       col: index % config.cols,
-      isTarget: order !== null,
+      isTarget: targets.has(index),
       cleared: false,
-      order,
     };
   });
 }

@@ -101,7 +101,7 @@ await page.locator('#start-game').tap();
 await page.evaluate(() => window.advanceTime(0));
 let state = await readState(page);
 assert.equal(state.phase, 'playing');
-assert.equal(state.mode, 'classic');
+assert.equal('mode' in state, false, '已删除记忆与顺序点击模式状态');
 assert.equal(state.battle.current, 1);
 assert.equal(state.battle.enemy.name, '紫莓果冻');
 assert.equal(state.battle.enemy.id, 'jelly');
@@ -114,8 +114,16 @@ assert.equal(state.battle.enemy.poise, 2);
 await page.waitForTimeout(420);
 state = await readState(page);
 assert.ok(Math.abs(state.feedback.enemy.displayWidth - 288) <= 1, '普通怪物应比上一版更大');
+assert.deepEqual(state.feedback.performance, { fpsTarget: 120, fpsLimit: 120 }, '战斗渲染上限应配置为 120 FPS');
+assert.equal(state.feedback.enemy.breathing, true, '怪物静止时应播放呼吸动画');
+const breathStart = { y: state.feedback.enemy.y, scaleY: state.feedback.enemy.scaleY };
+await page.waitForTimeout(260);
+state = await readState(page);
+assert.ok(state.feedback.enemy.y !== breathStart.y || state.feedback.enemy.scaleY !== breathStart.scaleY,
+  '怪物呼吸动画应产生轻微浮动或缩放变化');
 assert.deepEqual(state.grid, { rows: 4, cols: 4 }, '所有战斗应固定使用 4x4 泡泡盘面');
-assert.equal(state.timerMs, 0, '盘面倒计时应已取消');
+assert.equal(state.visibleTargets.length, state.remainingTargets, '目标泡泡应持续显示');
+assert.ok(state.bubbles.every((bubble) => !('order' in bubble)), '泡泡不应再携带点击顺序');
 assert.equal(await page.locator('.liquid-meter:not(.loading-progress-track)').count(), 6, '玩家三状态、敌人生命、蓄力和 Combo 应统一使用液体数值条');
 assert.equal(await page.locator('#battle-value, #enemy-attack-damage, #score-value, #attack-value, #shield-value, #mistake-value').count(), 0,
   '旧战数、伤害、得分、攻击、护盾标签和失误标签应全部移除');
@@ -268,12 +276,14 @@ assert.ok(state.feedback.transformedBubbles.every((bubble) => bubble.index === c
 
 state = await advanceToWindup(page, state);
 assert.equal(state.battle.enemy.attackState, 'windup');
+assert.equal(state.feedback.enemy.breathing, false, '怪物蓄力时应暂停呼吸，避免动作抢姿态');
 assert.equal(state.battle.enemy.mechanicState, 'active');
 assert.equal(state.feedback.intentLinks.rendered, intentCountBeforeImpact, '撞击蓄满时机制连线仍应独立存在');
 assert.equal(await page.locator('#enemy-attack-label').textContent(), '撞击警告');
 await page.evaluate((milliseconds) => window.advanceTime(milliseconds), state.battle.enemy.windupMs);
 state = await readState(page);
 assert.equal(state.battle.enemy.attackState, 'recovery');
+assert.equal(state.feedback.enemy.breathing, false, '怪物撞屏回位前不应提前恢复呼吸');
 assert.equal(state.battle.player.hp, hpBeforeCounterMiss - counterMissDamage - enemyImpactDamage);
 assert.equal(state.feedback.combatText.anchorY, combatTextAnchorY, '怪物伤害反馈应复用统一的怪物上方锚点');
 assert.equal(state.battle.enemy.mechanicState, 'active');
@@ -282,6 +292,9 @@ assert.ok(state.feedback.enemy.y >= 700, '第一战应由怪物本体撞向屏�
 assert.ok(state.feedback.enemy.scaleX >= 0.4, '怪物撞屏时应明显放大');
 assert.equal(state.feedback.audio.recentSfx.at(-1), 'enemy-attack', '怪物撞屏应播放水下重击音效');
 await screenshot(page, '04-jelly-screen-impact.png');
+await page.waitForTimeout(420);
+state = await readState(page);
+assert.equal(state.feedback.enemy.breathing, true, '怪物撞屏回位后应恢复呼吸');
 await page.reload({ waitUntil: 'networkidle' });
 await page.locator('#start-game').tap();
 state = await readState(page);
@@ -351,21 +364,6 @@ for (let guard = 0; guard < 1400; guard += 1) {
   state = await readState(page);
   if (state.phase === 'victory') break;
 
-  if (state.phase === 'preview') {
-    const expectedEnemyHp = [150, 240, 380, 600, 950][state.battle.current - 1];
-    const expectedMistakeDamage = [5, 5, 6, 7, 8][state.battle.current - 1];
-    assert.equal(state.battle.enemy.maxHp, expectedEnemyHp);
-    assert.equal(state.battle.player.mistakeDamage, expectedMistakeDamage);
-    assert.equal(state.visibleTargets.length, state.remainingTargets,
-      state.mode === 'memory' ? '记忆模式应一次显示全部目标' : '顺序模式应同时显示完整顺序');
-    if (!captured.has(state.battle.current)) {
-      captured.add(state.battle.current);
-      await page.waitForTimeout(450);
-      await screenshot(page, `06-${state.battle.enemy.id}-${state.battle.enemy.mechanic}.png`);
-    }
-    await advancePreview(page, state);
-    continue;
-  }
   if (state.phase === 'transition') {
     await page.evaluate((milliseconds) => window.advanceTime(milliseconds), state.battle.enemy.hp === 0 ? 800 : 420);
     continue;
@@ -412,6 +410,16 @@ for (let guard = 0; guard < 1400; guard += 1) {
     continue;
   }
   if (state.phase !== 'playing') break;
+  const expectedEnemyHp = [150, 240, 380, 600, 950][state.battle.current - 1];
+  const expectedMistakeDamage = [5, 5, 6, 7, 8][state.battle.current - 1];
+  assert.equal(state.battle.enemy.maxHp, expectedEnemyHp);
+  assert.equal(state.battle.player.mistakeDamage, expectedMistakeDamage);
+  assert.equal(state.visibleTargets.length, state.remainingTargets, '所有战斗都应持续显示目标泡泡');
+  if (!captured.has(state.battle.current)) {
+    captured.add(state.battle.current);
+    await page.waitForTimeout(450);
+    await screenshot(page, `06-${state.battle.enemy.id}-${state.battle.enemy.mechanic}.png`);
+  }
 
   if (state.battle.enemy.mechanicState === 'active') {
     if (['sequence', 'capture', 'shell'].includes(state.battle.enemy.mechanic)) {
@@ -422,9 +430,7 @@ for (let guard = 0; guard < 1400; guard += 1) {
       await page.evaluate(() => window.advanceTime(900));
       continue;
     }
-    const safeTarget = state.mode === 'sequence'
-      ? state.bubbles[state.expectedIndex]
-      : state.bubbles.find((bubble) => bubble.isTarget && !bubble.cleared && bubble.row !== state.battle.enemy.hazardRow);
+    const safeTarget = state.bubbles.find((bubble) => bubble.isTarget && !bubble.cleared && bubble.row !== state.battle.enemy.hazardRow);
     assert.ok(safeTarget && safeTarget.row !== state.battle.enemy.hazardRow);
     await page.evaluate((index) => window.selectBubble(index), safeTarget.index);
     continue;
@@ -496,9 +502,7 @@ for (let guard = 0; guard < 1400; guard += 1) {
     continue;
   }
 
-  const target = state.mode === 'sequence'
-    ? state.expectedIndex
-    : state.bubbles.find((bubble) => bubble.isTarget && !bubble.cleared)?.index;
+  const target = state.bubbles.find((bubble) => bubble.isTarget && !bubble.cleared)?.index;
   assert.notEqual(target, null);
   assert.notEqual(target, undefined);
 
@@ -595,17 +599,10 @@ async function screenshot(targetPage, name) {
   await targetPage.screenshot({ path: new URL(name, OUTPUT_DIR).pathname, fullPage: true });
 }
 
-async function advancePreview(targetPage, snapshot) {
-  const duration = snapshot.mode === 'memory' ? 900 : (snapshot.remainingTargets + 1) * 300;
-  await targetPage.evaluate((milliseconds) => window.advanceTime(milliseconds), duration);
-}
-
 async function advanceToWindup(targetPage, initial) {
   let snapshot = initial;
   for (let guard = 0; guard < 12 && snapshot.battle.enemy.attackState !== 'windup'; guard += 1) {
-    if (snapshot.phase === 'preview') {
-      await advancePreview(targetPage, snapshot);
-    } else if (snapshot.phase === 'transition') {
+    if (snapshot.phase === 'transition') {
       await targetPage.evaluate(() => window.advanceTime(420));
     } else if (snapshot.battle.enemy.attackState === 'charging') {
       const remaining = Math.max(60, snapshot.battle.enemy.attackCooldownMs * (1 - snapshot.battle.enemy.attackProgress) + 60);

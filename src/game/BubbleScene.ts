@@ -6,7 +6,7 @@ type AdjustableSound = Phaser.Sound.BaseSound & { setVolume(value: number): unkn
 
 interface BubbleView {
   image: Phaser.GameObjects.Image;
-  order: Phaser.GameObjects.Text;
+  marker: Phaser.GameObjects.Text;
   baseScale: number;
   cleared: boolean;
 }
@@ -27,6 +27,8 @@ export class BubbleScene extends Phaser.Scene {
   private intentLinks!: Phaser.GameObjects.Graphics;
   private shieldAura!: Phaser.GameObjects.Graphics;
   private enemy!: Phaser.GameObjects.Image;
+  private enemyBreathing?: Phaser.Tweens.Tween;
+  private enemyMotionEpoch = 0;
   private dropletEmitter!: Phaser.GameObjects.Particles.ParticleEmitter;
   private bubbleViews: BubbleView[] = [];
   private transientEffects = new Set<Phaser.GameObjects.GameObject>();
@@ -162,7 +164,12 @@ export class BubbleScene extends Phaser.Scene {
         displayHeight: Math.round(this.enemy.displayHeight),
         scaleX: Number(this.enemy.scaleX.toFixed(3)),
         scaleY: Number(this.enemy.scaleY.toFixed(3)),
+        breathing: this.enemyBreathing?.isPlaying() ?? false,
       } : null,
+      performance: {
+        fpsTarget: this.game.loop.targetFps,
+        fpsLimit: this.game.loop.fpsLimit,
+      },
       combatText: {
         visible: Boolean(this.combatText?.active),
         message: this.lastCombatText.message,
@@ -194,8 +201,8 @@ export class BubbleScene extends Phaser.Scene {
 
   private sync(update: SessionUpdate): void {
     const snapshot = update.snapshot;
-    const nextLevelKey = `${snapshot.mode}:${snapshot.battle}:${snapshot.board}:${snapshot.rows}x${snapshot.cols}`;
-    const shouldRenderContinuously = ['preview', 'playing', 'transition'].includes(snapshot.phase);
+    const nextLevelKey = `${snapshot.battle}:${snapshot.board}:${snapshot.rows}x${snapshot.cols}`;
+    const shouldRenderContinuously = ['playing', 'transition'].includes(snapshot.phase);
     if (shouldRenderContinuously && !this.game.loop.running) this.game.loop.wake();
 
     if (snapshot.phase === 'menu') {
@@ -264,7 +271,7 @@ export class BubbleScene extends Phaser.Scene {
       const image = this.add.image(x, y, 'bubble-normal')
         .setDisplaySize(diameter, diameter)
         .setDepth(10);
-      const order = this.add.text(x + diameter * 0.31, y - diameter * 0.31, '', {
+      const marker = this.add.text(x + diameter * 0.31, y - diameter * 0.31, '', {
         fontFamily: '"Avenir Next Rounded", "PingFang SC", sans-serif',
         fontSize: `${Math.round(diameter * 0.2)}px`,
         fontStyle: 'bold',
@@ -273,7 +280,7 @@ export class BubbleScene extends Phaser.Scene {
         strokeThickness: 7,
       }).setOrigin(0.5).setDepth(12).setVisible(false);
 
-      this.bubbleViews.push({ image, order, baseScale: image.scaleX, cleared: false });
+      this.bubbleViews.push({ image, marker, baseScale: image.scaleX, cleared: false });
     }
   }
 
@@ -300,14 +307,13 @@ export class BubbleScene extends Phaser.Scene {
       const showIntentMarker = intentOrder !== undefined && ['sequence', 'capture', 'shell'].includes(snapshot.enemyMechanic);
       const visibleTarget = visibleTargets.has(bubble.index) || showIntentMarker;
       view.image.setTexture(visibleTarget ? 'bubble-target' : 'bubble-normal');
-      const showSequence = snapshot.mode === 'sequence' && snapshot.phase === 'preview' && visibleTargets.has(bubble.index);
-      view.order.setVisible(showIntentMarker || showSequence);
-      view.order.setColor(showIntentMarker ? '#e05268' : '#5267a8');
-      view.order.setText(showIntentMarker
+      view.marker.setVisible(showIntentMarker);
+      view.marker.setColor('#e05268');
+      view.marker.setText(showIntentMarker
         ? snapshot.enemyMechanic === 'capture' ? '救'
           : snapshot.enemyMechanic === 'shell' ? '破'
             : String(intentOrder + 1)
-        : bubble.order === null ? '' : String(bubble.order + 1));
+        : '');
       if (bubble.cleared && !view.cleared) {
         view.cleared = true;
         const animateClear = update.effectIndex === bubble.index
@@ -317,7 +323,7 @@ export class BubbleScene extends Phaser.Scene {
           view.image.setVisible(false);
         } else {
           this.tweens.add({
-            targets: [view.image, view.order],
+            targets: [view.image, view.marker],
             alpha: 0,
             scaleX: view.image.scaleX * 1.35,
             scaleY: view.image.scaleY * 1.35,
@@ -739,7 +745,7 @@ export class BubbleScene extends Phaser.Scene {
     this.currentEnemyBattle = snapshot.battle;
     this.enemyCenterY = this.resolveEnemyCenterY();
     const size = snapshot.enemyIsBoss ? 340 : 280 + snapshot.battle * 8;
-    this.tweens.killTweensOf(this.enemy);
+    this.stopEnemyMotion();
     this.enemy
       .setTexture(snapshot.enemyTexture)
       .setVisible(true)
@@ -753,14 +759,25 @@ export class BubbleScene extends Phaser.Scene {
     this.enemyRestScaleY = this.enemy.scaleY;
     if (!this.preferences.reducedMotion) {
       this.enemy.setAlpha(0).setScale(this.enemyRestScaleX * 0.72, this.enemyRestScaleY * 0.72).setY(this.enemyCenterY - 14);
-      this.tweens.add({ targets: this.enemy, alpha: 1, y: this.enemyCenterY, scaleX: this.enemyRestScaleX, scaleY: this.enemyRestScaleY, duration: 340, ease: 'Back.Out' });
+      this.tweens.add({
+        targets: this.enemy,
+        alpha: 1,
+        y: this.enemyCenterY,
+        scaleX: this.enemyRestScaleX,
+        scaleY: this.enemyRestScaleY,
+        duration: 340,
+        ease: 'Back.Out',
+        onComplete: () => this.startEnemyBreathing(),
+      });
+    } else {
+      this.startEnemyBreathing();
     }
   }
 
   private animateEnemyHit(damage: number, defeated: boolean): void {
     if (!this.enemy.visible) return;
     if (!this.preferences.reducedMotion) {
-      this.tweens.killTweensOf(this.enemy);
+      this.stopEnemyMotion();
       this.enemy.setDepth(7).setPosition(WIDTH / 2, this.enemyCenterY).setScale(this.enemyRestScaleX, this.enemyRestScaleY);
       this.enemy.setTintFill(0xffffff);
       this.tweens.add({
@@ -788,7 +805,7 @@ export class BubbleScene extends Phaser.Scene {
 
   private animateEnemyWindup(): void {
     if (this.preferences.reducedMotion || !this.enemy.visible) return;
-    this.tweens.killTweensOf(this.enemy);
+    this.stopEnemyMotion();
     this.enemy.clearTint().setTint(ENEMY_RAGE_TINT).setDepth(8).setPosition(WIDTH / 2, this.enemyCenterY).setAngle(0);
     this.tweens.add({
       targets: this.enemy,
@@ -813,7 +830,8 @@ export class BubbleScene extends Phaser.Scene {
     const blocked = this.latestSnapshot.lastBlockedDamage;
     const damage = this.latestSnapshot.lastEnemyDamage;
     if (!this.preferences.reducedMotion && this.enemy.visible) {
-      this.tweens.killTweensOf(this.enemy);
+      this.stopEnemyMotion();
+      const motionEpoch = this.enemyMotionEpoch;
       this.enemy
         .setVisible(true)
         .setAlpha(1)
@@ -832,7 +850,7 @@ export class BubbleScene extends Phaser.Scene {
         this.destroyAfterTween(shockwave, { scale: 8.5, alpha: 0, duration: 260, ease: 'Cubic.Out' });
       }
       this.time.delayedCall(75, () => {
-        if (!this.enemy.active) return;
+        if (!this.enemy.active || motionEpoch !== this.enemyMotionEpoch) return;
         this.enemy.clearTint().setTint(this.getEnemyTint());
         this.tweens.add({
           targets: this.enemy,
@@ -842,7 +860,11 @@ export class BubbleScene extends Phaser.Scene {
           angle: 0,
           duration: 300,
           ease: 'Back.Out',
-          onComplete: () => this.enemy.setDepth(7),
+          onComplete: () => {
+            if (motionEpoch !== this.enemyMotionEpoch) return;
+            this.enemy.setDepth(7);
+            this.startEnemyBreathing();
+          },
         });
       });
     }
@@ -853,7 +875,7 @@ export class BubbleScene extends Phaser.Scene {
   private animateEnemyStaggered(damage: number, reduction: number): void {
     if (!this.enemy.visible) return;
     if (!this.preferences.reducedMotion) {
-      this.tweens.killTweensOf(this.enemy);
+      this.stopEnemyMotion();
       this.enemy.clearTint().setTint(0x9bf1e2).setDepth(8);
       this.tweens.add({
         targets: this.enemy,
@@ -876,7 +898,7 @@ export class BubbleScene extends Phaser.Scene {
   private animateEnemyBreak(): void {
     if (!this.enemy.visible) return;
     if (!this.preferences.reducedMotion) {
-      this.tweens.killTweensOf(this.enemy);
+      this.stopEnemyMotion();
       this.enemy.clearTint().setTint(0x9bf1e2).setDepth(8).setAngle(-8);
       this.tweens.add({
         targets: this.enemy,
@@ -903,7 +925,7 @@ export class BubbleScene extends Phaser.Scene {
 
   private restoreEnemyPose(): void {
     if (!this.enemy.active || !this.enemy.visible) return;
-    this.tweens.killTweensOf(this.enemy);
+    this.stopEnemyMotion();
     this.enemy
       .clearTint()
       .setTint(this.getEnemyTint())
@@ -912,6 +934,38 @@ export class BubbleScene extends Phaser.Scene {
       .setAngle(0)
       .setPosition(WIDTH / 2, this.enemyCenterY)
       .setScale(this.enemyRestScaleX, this.enemyRestScaleY);
+    this.startEnemyBreathing();
+  }
+
+  private startEnemyBreathing(): void {
+    if (this.preferences.reducedMotion || !this.enemy.visible || this.latestSnapshot.enemyHp === 0
+      || this.latestSnapshot.enemyAttackState === 'windup'
+      || ['menu', 'reward', 'game-over', 'victory'].includes(this.latestSnapshot.phase)) return;
+    this.stopEnemyBreathing();
+    this.enemy
+      .setPosition(WIDTH / 2, this.enemyCenterY)
+      .setScale(this.enemyRestScaleX, this.enemyRestScaleY);
+    this.enemyBreathing = this.tweens.add({
+      targets: this.enemy,
+      y: this.enemyCenterY - 5,
+      scaleX: this.enemyRestScaleX * 1.018,
+      scaleY: this.enemyRestScaleY * 0.982,
+      duration: 1100,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.InOut',
+    });
+  }
+
+  private stopEnemyMotion(): void {
+    this.enemyMotionEpoch += 1;
+    this.stopEnemyBreathing();
+    this.tweens.killTweensOf(this.enemy);
+  }
+
+  private stopEnemyBreathing(): void {
+    this.enemyBreathing?.stop();
+    this.enemyBreathing = undefined;
   }
 
   private getEnemyTint(): number {
@@ -1037,7 +1091,7 @@ export class BubbleScene extends Phaser.Scene {
   private clearBoard(): void {
     for (const view of this.bubbleViews) {
       view.image.destroy();
-      view.order.destroy();
+      view.marker.destroy();
     }
     this.bubbleViews = [];
     this.currentLevelKey = '';

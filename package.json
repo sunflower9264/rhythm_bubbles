@@ -3,7 +3,7 @@
   "version": "2.0.0",
   "private": true,
   "type": "module",
-  "description": "A cute, production-ready visual memory game for the web.",
+  "description": "A cute, production-ready bubble battle game for the web.",
   "engines": {
     "node": ">=20.19.0"
   },

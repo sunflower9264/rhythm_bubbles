@@ -3,7 +3,6 @@ import './styles.css';
 import { BubbleScene } from './game/BubbleScene';
 import { GameController } from './game/core/GameController';
 import { createSeededRandom } from './game/core/level';
-import type { GameMode } from './game/core/types';
 import { AppUI } from './ui/AppUI';
 
 const seed = Number(new URLSearchParams(window.location.search).get('seed'));
@@ -79,9 +78,9 @@ async function bootGame(): Promise<void> {
       powerPreference: 'low-power',
     },
     fps: {
-      target: 30,
-      limit: 30,
-      min: 20,
+      target: 120,
+      limit: 120,
+      min: 30,
       smoothStep: true,
     },
     scale: {
@@ -102,7 +101,6 @@ window.render_game_to_text = () => {
   return JSON.stringify({
     coordinateSystem: 'bubble indices are row-major, origin at top-left; x increases right, y increases down',
     phase: snapshot.phase,
-    mode: snapshot.mode,
     level: snapshot.level,
     score: snapshot.score,
     battle: {
@@ -147,17 +145,15 @@ window.render_game_to_text = () => {
       },
       rewards: snapshot.rewardChoices,
     },
-    timerMs: Math.round(snapshot.remainingTimeMs),
     grid: { rows: snapshot.rows, cols: snapshot.cols },
     remainingTargets: snapshot.remainingTargets,
     targetCount: snapshot.targetCount,
     boardTapCount: snapshot.boardTapCount,
     boardTapLimit: snapshot.boardTapLimit,
     visibleTargets: snapshot.visibleTargetIndices,
-    expectedIndex: snapshot.expectedIndex,
     feedback: scene.getFeedbackState(),
-    bubbles: snapshot.bubbles.map(({ index, row, col, isTarget, cleared, order }) => ({
-      index, row, col, isTarget, cleared, order,
+    bubbles: snapshot.bubbles.map(({ index, row, col, isTarget, cleared }) => ({
+      index, row, col, isTarget, cleared,
     })),
   });
 };
@@ -167,7 +163,7 @@ window.advanceTime = (milliseconds: number) => {
   controller.tick(Math.max(0, milliseconds), true);
 };
 
-window.startGame = (_mode?: GameMode) => controller.start();
+window.startGame = () => controller.start();
 window.selectBubble = (index: number) => controller.select(index);
 window.selectReward = (index: number) => controller.selectReward(index);
 
@@ -189,7 +185,7 @@ declare global {
   interface Window {
     render_game_to_text: () => string;
     advanceTime: (milliseconds: number) => void;
-    startGame: (mode?: GameMode) => void;
+    startGame: () => void;
     selectBubble: (index: number) => void;
     selectReward: (index: number) => void;
   }

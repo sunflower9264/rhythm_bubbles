@@ -1,6 +1,6 @@
 import { GameSession } from './GameSession';
 import type { RandomSource } from './level';
-import type { GameMode, SessionSnapshot, SessionUpdate } from './types';
+import type { SessionSnapshot, SessionUpdate } from './types';
 
 export interface Preferences {
   sound: boolean;
@@ -44,7 +44,7 @@ export class GameController {
     return () => this.listeners.delete(listener);
   }
 
-  start(_mode?: GameMode): void {
+  start(): void {
     this.commit(this.session.start());
   }
 
@@ -58,7 +58,7 @@ export class GameController {
 
   tick(milliseconds: number, flush = false): void {
     const snapshot = this.session.getSnapshot();
-    if (!['preview', 'playing', 'transition'].includes(snapshot.phase)) {
+    if (!['playing', 'transition'].includes(snapshot.phase)) {
       this.pendingTimeMs = 0;
       return;
     }

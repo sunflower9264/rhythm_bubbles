@@ -1,11 +1,5 @@
 import { GameController, type Preferences } from '../game/core/GameController';
-import type { GameMode, SessionSnapshot, SessionUpdate } from '../game/core/types';
-
-const MODE_LABEL: Record<GameMode, string> = {
-  classic: '寻光',
-  memory: '记忆',
-  sequence: '旋律',
-};
+import type { SessionSnapshot, SessionUpdate } from '../game/core/types';
 
 const MENU_ENEMIES = [
   { id: 'jelly', texture: 'jelly-enemy' },
@@ -157,7 +151,7 @@ export class AppUI {
     this.style(comboBurst, '--combo-progress', `${Math.max(0, Math.min(1, comboProgress)) * 100}%`);
 
     const attackIntent = this.get('#enemy-attack-intent');
-    const attackFrozen = ['preview', 'paused', 'reward', 'transition'].includes(snapshot.phase);
+    const attackFrozen = ['paused', 'reward', 'transition'].includes(snapshot.phase);
     const attackLabel = snapshot.enemyHp === 0
       ? '攻击已停止'
       : snapshot.enemyAttackState === 'windup'
@@ -225,13 +219,13 @@ export class AppUI {
     if (update.effect === 'reward-picked') {
       this.flashToast(`${snapshot.enemyIsBoss ? 'Boss 战' : `第 ${snapshot.battle} 战`} · ${mechanicAnnouncement}`, 'battle');
     }
-    if (update.effect === 'start') this.announce(`${snapshot.mode ? MODE_LABEL[snapshot.mode] : ''}开始`);
+    if (update.effect === 'start') this.announce('开始战斗');
     if (['mistake', 'counter-miss', 'enemy-impact', 'timeout-impact'].includes(update.effect) && snapshot.phase === 'game-over') this.announce('挑战失败');
     if (update.effect === 'victory') this.announce('挑战成功');
   }
 
   private openSettings(): void {
-    this.settingsPausedGame = ['playing', 'preview', 'transition'].includes(this.latestSnapshot.phase);
+    this.settingsPausedGame = ['playing', 'transition'].includes(this.latestSnapshot.phase);
     if (this.settingsPausedGame) this.controller.pause();
     this.get('#settings-modal').classList.add('is-visible');
     this.get<HTMLButtonElement>('#settings-close').focus();

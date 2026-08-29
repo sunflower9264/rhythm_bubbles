@@ -6,8 +6,8 @@ Original prompt: 重写 Rhythm Bubbles，保持核心玩法不变，全面重做
 - Form factor: mobile-first portrait H5, centered and framed on desktop.
 - Visual direction: cute bubble cloud garden; generated art only, no third-party image assets.
 - Audio direction: deterministic procedural WAV generation committed with its source script.
-- Gameplay invariant: one run automatically progresses through classic / memory / sequence; every target clears in one valid hit for +10 scoring, mistakes cost shield/health, a board refreshes when all targets are cleared or valid taps reach `targetCount + 3`, and only zero health ends the run.
-- Battle loop: correct bubbles deal combo damage while enemies charge attacks in real time; combos and board clears push the charge meter back without hard-cancelling the attack. Preview, pause, transition, and reward selection freeze the attack clock. Four reward choices rotate through three-option drafts; battle five is the boss and ends in victory.
+- Gameplay invariant: all five battles use a persistent visible-target board with free-order taps; every target clears in one valid hit for +10 scoring, mistakes cost shield/health, a board refreshes when all targets are cleared or valid taps reach `targetCount + 3`, and only zero health ends the run.
+- Battle loop: correct bubbles deal combo damage while enemies charge attacks in real time; combos and board clears push the charge meter back without hard-cancelling the attack. Pause, transition, and reward selection freeze the attack clock. Four reward choices rotate through three-option drafts; battle five is the boss and ends in victory.
 
 ## Status
 
@@ -19,7 +19,7 @@ Original prompt: 重写 Rhythm Bubbles，保持核心玩法不变，全面重做
 - [x] Generate audio assets.
 - [x] Run browser interaction, screenshot, mobile and production-build validation.
 - [x] Run the production flow on Chromium, Firefox, and WebKit with no console errors.
-- [x] Visually inspect mobile menu, gameplay, sequence preview, results, and desktop layout screenshots.
+- [x] Visually inspect mobile menu, gameplay, monster mechanics, results, and desktop layout screenshots.
 - [x] Clear transient score particles and level toasts when a new mode starts, then rerun all browser checks.
 - [x] Add the complete five-battle Roguelite loop, original enemy art, combat HUD, reward draft, boss, victory state, and battle audio.
 
@@ -160,3 +160,7 @@ Original prompt: 重写 Rhythm Bubbles，保持核心玩法不变，全面重做
 - 使用 imagegen 生成并接入泡泡利刃、果冻心、糖霜护盾、回响钟摆、失败泡泡角色和胜利珊瑚王冠 6 张透明 PNG，删除结算页的 `×﹏×`、`✦` 等代码表情/字符图标。奖励卡针对 320×568 收紧边距、图标和间距，并隐藏重复的“选择”列，说明文字稳定落在卡片内；失败和胜利弹窗使用同风格生成图标。
 - 27 项逻辑/构建测试、依赖审计、性能门槛、Chromium 完整五战生产流程和 `git diff --check` 通过；已实际检查 390×844 战斗/胜利及 320×568 奖励/失败截图，边框、图标、说明、统计和按钮均无错位。Service Worker 准备升级为 `v57`。
 - 低功耗与结算 UI 版本已提交并推送，以 Service Worker `v57` 部署到 `http://64.83.41.39:18088`。`dist/` 与 `/var/www/rhythm-bubbles/` 完全一致，Nginx 校验和重载通过，6 张新图标均返回 HTTP 200；公网性能门槛复测通过，UI 改写 `4.8` 次/秒、渲染提交 `10.3` 次/秒。
+- Original prompt: 帧率太低了。120帧吧。然后玩家泡泡点击方式，删除闪烁和显示点击顺序再消失的这两种。这两种太影响体验了，后续再想新的点击方式。然后游戏界面，怪物要有呼吸感。改完开个子agent，做代码审查，清除死代码。改完部署。可以开多个子agent协助
+- Phaser 战斗渲染目标和上限均改为 120 FPS，同时保留 100ms 规则节流、低功耗 GPU、静态视觉缓存及菜单/暂停休眠。删除玩家侧 `classic / memory / sequence` 模式、`preview` 阶段、顺序字段、预览计时、旧模式文案和 124 行无引用样式；五战统一为目标持续显示、任意顺序点击。紫莓果冻的按序反制是怪物专属机制，保持不变。
+- 五只怪物加入低幅度上下浮动与轻微挤压的呼吸 Tween；蓄力、受击、破势和撞屏时暂停，回到常态后恢复。动作代际保护会丢弃过期撞屏回调，呼吸只停止自身 Tween，不再误杀其他怪物姿态。子 Agent 代码/规范审查完成，并据此删除固定 4×4 盘面的可空配置包装、补齐动作竞态回归和当前玩法文档。
+- 27 项逻辑测试、TypeScript/Vite 构建、依赖审计、`git diff --check`、移动端性能门槛和 Chromium 随机五怪完整流程通过；E2E 验证 120 FPS 配置、怪物实际呼吸位移、蓄力暂停呼吸、撞屏回位后恢复，以及运行时不再暴露 `mode / order / expectedIndex`。静置战斗测得 WebGL 提交 `5.6/s`、HUD 改写 `0.8/s`；已目视检查常态、机制连线、撞屏和刺豚截图。Service Worker 准备升级为 `v58`，尚未部署。
