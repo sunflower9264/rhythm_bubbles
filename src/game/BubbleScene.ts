@@ -17,7 +17,7 @@ const BOARD_CENTER_Y = 920;
 const BOARD_SIZE = 604;
 const BOARD_FRAME_SIZE = 680;
 const BOARD_PLAY_SIZE = 470;
-const ENEMY_CENTER_Y = 450;
+const ENEMY_CENTER_Y = 482;
 const ENEMY_RAGE_TINT = 0xff6f7d;
 
 export class BubbleScene extends Phaser.Scene {
@@ -27,6 +27,11 @@ export class BubbleScene extends Phaser.Scene {
   private intentLinks!: Phaser.GameObjects.Graphics;
   private shieldAura!: Phaser.GameObjects.Graphics;
   private enemy!: Phaser.GameObjects.Image;
+  private ultimateReadyAura!: Phaser.GameObjects.Image;
+  private ultimateWave!: Phaser.GameObjects.Image;
+  private ultimateReadyTween?: Phaser.Tweens.Tween;
+  private ultimateWaveTween?: Phaser.Tweens.Tween;
+  private ultimateReadyVisual = false;
   private enemyBreathing?: Phaser.Tweens.Tween;
   private enemyMotionEpoch = 0;
   private dropletEmitter!: Phaser.GameObjects.Particles.ParticleEmitter;
@@ -70,6 +75,7 @@ export class BubbleScene extends Phaser.Scene {
     this.load.image('hermit-enemy', 'art/hermit-enemy.png');
     this.load.image('manta-enemy', 'art/manta-enemy.png');
     this.load.image('puffer-enemy', 'art/puffer-enemy.png');
+    this.load.image('skill-ultimate', 'art/ui/skill-ultimate.png');
     this.load.audio('bgm', 'audio/bubble-garden-groove-v2.wav');
     this.load.audio('tap', 'audio/tap.wav');
     this.load.audio('correct-pop-1', 'audio/correct-pop-1.wav');
@@ -95,6 +101,16 @@ export class BubbleScene extends Phaser.Scene {
     this.createBubbleTexture('bubble-normal', ['#d8fff3', '#79dcca', '#45b9ac']);
     this.createBubbleTexture('bubble-target', ['#fff6a8', '#ffb96f', '#ff7f82']);
     this.createDropletTexture();
+    this.ultimateReadyAura = this.add.image(WIDTH / 2, this.enemyCenterY, 'skill-ultimate')
+      .setDisplaySize(348, 348)
+      .setDepth(6)
+      .setAlpha(0)
+      .setVisible(false);
+    this.ultimateWave = this.add.image(WIDTH / 2, this.enemyCenterY, 'skill-ultimate')
+      .setDisplaySize(390, 390)
+      .setDepth(8)
+      .setAlpha(0)
+      .setVisible(false);
     this.enemy = this.add.image(WIDTH / 2, this.enemyCenterY, 'jelly-enemy').setDisplaySize(288, 288).setDepth(7).setVisible(false);
     this.dropletEmitter = this.add.particles(0, 0, 'bubble-droplet', {
       emitting: false,
@@ -114,7 +130,7 @@ export class BubbleScene extends Phaser.Scene {
     this.shieldAura = this.add.graphics().setDepth(46);
     this.drawBoard();
 
-    this.game.canvas.setAttribute('aria-label', '泡泡侠大战海洋怪游戏区：轻触泡泡进行游戏');
+    this.game.canvas.setAttribute('aria-label', '泡泡侠大战海洋怪游戏区：轻触泡泡攻击，能量满时轻触怪物释放泡泡海啸');
     this.game.canvas.setAttribute('role', 'application');
     this.game.canvas.addEventListener('pointerup', this.handleCanvasPointer, { passive: true });
 
@@ -166,6 +182,11 @@ export class BubbleScene extends Phaser.Scene {
         scaleY: Number(this.enemy.scaleY.toFixed(3)),
         breathing: this.enemyBreathing?.isPlaying() ?? false,
       } : null,
+      ultimate: {
+        readyAuraVisible: Boolean(this.ultimateReadyAura?.visible),
+        waveVisible: Boolean(this.ultimateWave?.visible),
+        waveAlpha: Number((this.ultimateWave?.alpha ?? 0).toFixed(2)),
+      },
       performance: {
         fpsTarget: this.game.loop.targetFps,
         fpsLimit: this.game.loop.fpsLimit,
@@ -210,6 +231,7 @@ export class BubbleScene extends Phaser.Scene {
       this.board.setVisible(false);
       this.boardGlow.setVisible(false);
       this.enemy.setVisible(false);
+      this.hideUltimateVisuals();
       this.intentLinks.clear();
       this.shieldAura.clear();
       this.renderedIntentLinkCount = 0;
@@ -226,6 +248,7 @@ export class BubbleScene extends Phaser.Scene {
     this.board.setVisible(true);
     this.boardGlow.setVisible(true);
     this.syncEnemy(snapshot, update);
+    this.syncUltimateVisual(snapshot, update.abilityEffect);
     this.drawShield(snapshot);
     if (nextLevelKey !== this.currentLevelKey) {
       this.buildBubbles(snapshot);
@@ -348,7 +371,10 @@ export class BubbleScene extends Phaser.Scene {
       this.board.setDisplaySize(BOARD_FRAME_SIZE, BOARD_FRAME_SIZE);
       this.boardGlow.setScale(1);
     }
-    if (effect === 'none') return;
+    if (effect === 'none') {
+      this.handleAbilityEffect(update);
+      return;
+    }
 
     const bubbleHitEffects = ['correct', 'board-clear', 'enemy-staggered', 'enemy-countered', 'enemy-break', 'enemy-windup', 'encounter-win'];
     if (bubbleHitEffects.includes(effect) && effectIndex !== undefined) {
@@ -358,7 +384,11 @@ export class BubbleScene extends Phaser.Scene {
       if (this.latestSnapshot.lastAttackReduction > 0) {
         this.animateEnemyStaggered(this.latestSnapshot.lastDamage, this.latestSnapshot.lastAttackReduction);
       } else {
-        this.animateEnemyHit(this.latestSnapshot.lastDamage, effect === 'encounter-win');
+        this.animateEnemyHit(
+          this.latestSnapshot.lastDamage,
+          effect === 'encounter-win',
+          !['enemy-countered', 'enemy-break'].includes(effect),
+        );
       }
     }
 
@@ -387,6 +417,8 @@ export class BubbleScene extends Phaser.Scene {
       }
     }
 
+    this.handleAbilityEffect(update);
+
     if (!this.preferences.sound) return;
     if (bubbleHitEffects.includes(effect) && effectIndex !== undefined) {
       const variation = ((Math.floor(this.latestSnapshot.score / 10) + (effectIndex ?? 0)) % 3) + 1;
@@ -412,6 +444,122 @@ export class BubbleScene extends Phaser.Scene {
     if (effect === 'victory') this.playSfx('victory', 0.52);
     if (['mistake', 'mistake-overflow', 'counter-miss'].includes(effect)) this.playSfx('wrong-wobble', effect === 'mistake-overflow' ? 0.48 : 0.38);
     if (effect === 'countdown') this.playSfx('countdown', 0.23);
+  }
+
+  private handleAbilityEffect(update: SessionUpdate): void {
+    if (!update.abilityEffect) return;
+    if (update.abilityEffect === 'ultimate-start') {
+      this.ultimateReadyVisual = false;
+      this.ultimateReadyTween?.stop();
+      this.ultimateReadyTween = undefined;
+      this.ultimateReadyAura.setVisible(false).setAlpha(0);
+      this.startUltimateWave(true);
+      this.createUltimatePulse(0, 1);
+      return;
+    }
+    if (update.abilityEffect === 'ultimate-hit') {
+      this.animateUltimateHit(update.abilityStage ?? 1);
+      return;
+    }
+    if (update.abilityEffect === 'ultimate-finish') {
+      this.animateUltimateHit(3);
+      return;
+    }
+    if (update.abilityEffect === 'ultimate-end') this.stopUltimateWave(false);
+  }
+
+  private animateUltimateHit(stage: 1 | 2 | 3): void {
+    if (!this.enemy.visible) return;
+    const intensity = stage === 3 ? 1.65 : stage === 2 ? 1.25 : 1;
+    this.createUltimatePulse(stage, intensity);
+    this.dropletEmitter.explode(stage === 3 ? 46 : stage === 2 ? 32 : 22, this.enemy.x, this.enemy.y);
+
+    this.ultimateWaveTween?.stop();
+    this.ultimateWaveTween = undefined;
+    this.ultimateWave
+      .setPosition(WIDTH / 2, this.enemyCenterY)
+      .setDisplaySize(this.enemy.displayWidth + 112, this.enemy.displayHeight + 112)
+      .setVisible(true)
+      .setAlpha(stage === 3 ? 0.48 : 0.36)
+      .setAngle(stage === 3 ? -12 : -5);
+    if (!this.preferences.reducedMotion) {
+      const waveScaleX = this.ultimateWave.scaleX;
+      const waveScaleY = this.ultimateWave.scaleY;
+      this.ultimateWave.setScale(waveScaleX * 0.84, waveScaleY * 0.84);
+      this.ultimateWaveTween = this.tweens.add({
+        targets: this.ultimateWave,
+        angle: stage === 3 ? 20 : 10,
+        scaleX: waveScaleX * (stage === 3 ? 1.22 : 1.08),
+        scaleY: waveScaleY * (stage === 3 ? 1.22 : 1.08),
+        alpha: 0.2,
+        duration: stage === 3 ? 310 : 220,
+        ease: 'Cubic.Out',
+        onComplete: () => {
+          if (this.latestSnapshot.ultimateActive) this.startUltimateWave(false);
+          else this.stopUltimateWave(false);
+        },
+      });
+
+      if (this.latestSnapshot.enemyHp <= 0) return;
+      this.stopEnemyMotion();
+      const enemyEpoch = this.enemyMotionEpoch;
+      const offsetX = stage === 3 ? 42 : stage === 2 ? 20 : 10;
+      const offsetY = stage === 3 ? -48 : stage === 2 ? -20 : -10;
+      this.enemy
+        .setDepth(9)
+        .setPosition(WIDTH / 2 + offsetX, this.enemyCenterY + offsetY)
+        .setScale(
+          this.enemyRestScaleX * (stage === 3 ? 0.82 : 0.92),
+          this.enemyRestScaleY * (stage === 3 ? 1.14 : 1.07),
+        );
+      if (stage === 3) this.cameras.main.shake(90, 0.0028);
+      this.time.delayedCall(stage === 3 ? 70 : 30, () => {
+        if (!this.enemy.active || enemyEpoch !== this.enemyMotionEpoch) return;
+        this.tweens.add({
+          targets: this.enemy,
+          x: WIDTH / 2,
+          y: this.enemyCenterY,
+          scaleX: this.enemyRestScaleX,
+          scaleY: this.enemyRestScaleY,
+          duration: stage === 3 ? 300 : 190,
+          ease: 'Back.Out',
+          onComplete: () => {
+            if (enemyEpoch !== this.enemyMotionEpoch) return;
+            if (this.latestSnapshot.enemyAttackState === 'windup') this.setEnemyWindupPose();
+            else this.restoreEnemyPose();
+          },
+        });
+      });
+    }
+  }
+
+  private createUltimatePulse(stage: number, intensity: number): void {
+    const radius = this.enemy.displayWidth * (stage === 0 ? 0.36 : 0.42);
+    const ring = this.add.circle(this.enemy.x, this.enemy.y, radius)
+      .setStrokeStyle(stage === 3 ? 15 : 10, stage === 3 ? 0xffd1e6 : 0xa9fff0, 0.9)
+      .setDepth(10)
+      .setScale(stage === 0 ? 0.5 : 0.72);
+    const glow = this.add.circle(
+      this.enemy.x,
+      this.enemy.y,
+      radius * 0.82,
+      stage === 3 ? 0xff8fb7 : 0x63d6c5,
+      stage === 3 ? 0.24 : 0.16,
+    ).setDepth(9);
+    this.transientEffects.add(ring);
+    this.transientEffects.add(glow);
+    this.destroyAfterTween(ring, {
+      scale: 1.45 + intensity * 0.42,
+      alpha: 0,
+      duration: this.preferences.reducedMotion ? 150 : 260 + intensity * 55,
+      ease: 'Cubic.Out',
+    });
+    this.destroyAfterTween(glow, {
+      scale: 1.2 + intensity * 0.32,
+      alpha: 0,
+      duration: this.preferences.reducedMotion ? 130 : 210 + intensity * 40,
+      ease: 'Sine.Out',
+    });
   }
 
   private animateCorrectAt(index: number, large: boolean): void {
@@ -757,6 +905,7 @@ export class BubbleScene extends Phaser.Scene {
       .setTint(this.getEnemyTint());
     this.enemyRestScaleX = this.enemy.scaleX;
     this.enemyRestScaleY = this.enemy.scaleY;
+    this.resolveCombatFeedbackY();
     if (!this.preferences.reducedMotion) {
       this.enemy.setAlpha(0).setScale(this.enemyRestScaleX * 0.72, this.enemyRestScaleY * 0.72).setY(this.enemyCenterY - 14);
       this.tweens.add({
@@ -774,7 +923,125 @@ export class BubbleScene extends Phaser.Scene {
     }
   }
 
-  private animateEnemyHit(damage: number, defeated: boolean): void {
+  private syncUltimateVisual(snapshot: SessionSnapshot, abilityEffect?: SessionUpdate['abilityEffect']): void {
+    const canShowReady = snapshot.phase === 'playing'
+      && snapshot.ultimateReady
+      && !snapshot.ultimateActive
+      && this.enemy.visible;
+    if (canShowReady !== this.ultimateReadyVisual) {
+      this.ultimateReadyVisual = canShowReady;
+      this.ultimateReadyTween?.stop();
+      this.ultimateReadyTween = undefined;
+      if (canShowReady) {
+        this.ultimateReadyAura
+          .setPosition(WIDTH / 2, this.enemyCenterY)
+          .setDisplaySize(this.enemy.displayWidth + 62, this.enemy.displayHeight + 62)
+          .setAngle(0)
+          .setAlpha(this.preferences.reducedMotion ? 0.25 : 0.16)
+          .setVisible(true);
+        if (!this.preferences.reducedMotion) {
+          const scaleX = this.ultimateReadyAura.scaleX;
+          const scaleY = this.ultimateReadyAura.scaleY;
+          this.ultimateReadyTween = this.tweens.add({
+            targets: this.ultimateReadyAura,
+            alpha: 0.38,
+            angle: 7,
+            scaleX: scaleX * 1.07,
+            scaleY: scaleY * 1.07,
+            duration: 1750,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.InOut',
+          });
+        }
+      } else {
+        this.ultimateReadyAura.setVisible(false).setAlpha(0);
+      }
+    }
+
+    if (snapshot.ultimateActive && !this.ultimateWave.visible) {
+      this.startUltimateWave(false);
+    } else if (!snapshot.ultimateActive && this.ultimateWave.visible && abilityEffect !== 'ultimate-end') {
+      this.stopUltimateWave(true);
+    }
+  }
+
+  private hideUltimateVisuals(): void {
+    this.ultimateReadyVisual = false;
+    this.ultimateReadyTween?.stop();
+    this.ultimateReadyTween = undefined;
+    this.ultimateWaveTween?.stop();
+    this.ultimateWaveTween = undefined;
+    this.ultimateReadyAura?.setVisible(false).setAlpha(0);
+    this.ultimateWave?.setVisible(false).setAlpha(0);
+  }
+
+  private startUltimateWave(withEntrance: boolean): void {
+    this.ultimateWaveTween?.stop();
+    this.ultimateWaveTween = undefined;
+    this.ultimateWave
+      .setPosition(WIDTH / 2, this.enemyCenterY)
+      .setDisplaySize(this.enemy.displayWidth + 112, this.enemy.displayHeight + 112)
+      .setAngle(withEntrance ? -18 : 0)
+      .setAlpha(this.preferences.reducedMotion ? 0.23 : withEntrance ? 0.08 : 0.2)
+      .setVisible(true);
+    if (this.preferences.reducedMotion) return;
+    if (withEntrance) {
+      const scaleX = this.ultimateWave.scaleX;
+      const scaleY = this.ultimateWave.scaleY;
+      this.ultimateWave.setScale(scaleX * 0.62, scaleY * 0.62);
+      this.ultimateWaveTween = this.tweens.add({
+        targets: this.ultimateWave,
+        alpha: 0.32,
+        angle: 5,
+        scaleX,
+        scaleY,
+        duration: 340,
+        ease: 'Back.Out',
+        onComplete: () => this.startUltimateWaveLoop(),
+      });
+      return;
+    }
+    this.startUltimateWaveLoop();
+  }
+
+  private startUltimateWaveLoop(): void {
+    if (!this.ultimateWave.visible || this.preferences.reducedMotion) return;
+    this.ultimateWaveTween?.stop();
+    const scaleX = this.ultimateWave.scaleX;
+    const scaleY = this.ultimateWave.scaleY;
+    this.ultimateWaveTween = this.tweens.add({
+      targets: this.ultimateWave,
+      alpha: 0.2,
+      angle: this.ultimateWave.angle + 16,
+      scaleX: scaleX * 1.035,
+      scaleY: scaleY * 1.035,
+      duration: 1300,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.InOut',
+    });
+  }
+
+  private stopUltimateWave(immediate: boolean): void {
+    this.ultimateWaveTween?.stop();
+    this.ultimateWaveTween = undefined;
+    if (immediate || this.preferences.reducedMotion) {
+      this.ultimateWave.setVisible(false).setAlpha(0);
+      return;
+    }
+    this.ultimateWaveTween = this.tweens.add({
+      targets: this.ultimateWave,
+      alpha: 0,
+      scaleX: this.ultimateWave.scaleX * 1.15,
+      scaleY: this.ultimateWave.scaleY * 1.15,
+      duration: 300,
+      ease: 'Cubic.In',
+      onComplete: () => this.ultimateWave.setVisible(false),
+    });
+  }
+
+  private animateEnemyHit(damage: number, defeated: boolean, showDamageText = true): void {
     if (!this.enemy.visible) return;
     if (!this.preferences.reducedMotion) {
       this.stopEnemyMotion();
@@ -800,7 +1067,9 @@ export class BubbleScene extends Phaser.Scene {
         this.dropletEmitter.explode(42, this.enemy.x, this.enemy.y);
       }
     }
-    this.floatCombatText(defeated ? '完美收尾！' : `-${damage}`, defeated ? '#ff6f7d' : '#7358b8', defeated ? 42 : 32);
+    if (showDamageText) {
+      this.floatCombatText(defeated ? '完美收尾！' : `-${damage}`, defeated ? '#ff6f7d' : '#7358b8', defeated ? 42 : 32);
+    }
   }
 
   private animateEnemyWindup(): void {
@@ -913,7 +1182,6 @@ export class BubbleScene extends Phaser.Scene {
       });
       this.dropletEmitter.explode(34, this.enemy.x, this.enemy.y);
     }
-    this.floatCombatText('破势！伤害 ×1.5', '#2f9f96', 38);
   }
 
   private floatPlayerDamage(prefix: string): void {
@@ -978,7 +1246,7 @@ export class BubbleScene extends Phaser.Scene {
     if (!enemyHudRect || canvasRect.height <= 0) return ENEMY_CENTER_Y;
     const boardTop = canvasRect.top + (BOARD_CENTER_Y - BOARD_FRAME_SIZE / 2) / HEIGHT * canvasRect.height;
     const screenCenter = (enemyHudRect.bottom + boardTop) / 2;
-    return Phaser.Math.Clamp((screenCenter - canvasRect.top) / canvasRect.height * HEIGHT, 390, 520);
+    return Phaser.Math.Clamp((screenCenter - canvasRect.top) / canvasRect.height * HEIGHT + 32, 422, 552);
   }
 
   private floatCombatText(message: string, color: string, size: number): void {
@@ -1000,11 +1268,11 @@ export class BubbleScene extends Phaser.Scene {
     this.transientEffects.add(text);
     this.tweens.add({
       targets: text,
-      y: y + 10,
+      y,
       scale: 1,
       duration: 180,
       ease: 'Back.Out',
-      onComplete: () => this.destroyAfterTween(text, { y: y + 28, alpha: 0, duration: 280, delay: 360, ease: 'Cubic.In' }),
+      onComplete: () => this.destroyAfterTween(text, { y: y - 24, alpha: 0, duration: 280, delay: 360, ease: 'Cubic.In' }),
     });
   }
 
@@ -1013,13 +1281,26 @@ export class BubbleScene extends Phaser.Scene {
     const enemyHudRect = document.getElementById('enemy-status')?.getBoundingClientRect();
     const enemyRestHeight = this.enemy.height * this.enemyRestScaleY;
     const enemyTop = this.enemyCenterY - enemyRestHeight / 2;
-    if (!enemyHudRect || canvasRect.height <= 0) return enemyTop - 24;
-    const hudBottom = (enemyHudRect.bottom - canvasRect.top) / canvasRect.height * HEIGHT;
-    return Phaser.Math.Clamp(
-      Math.max(enemyTop - 24, hudBottom + 40),
-      80,
-      this.enemyCenterY - 32,
-    );
+    const hudBottom = enemyHudRect && canvasRect.height > 0
+      ? (enemyHudRect.bottom - canvasRect.top) / canvasRect.height * HEIGHT
+      : 0;
+    const y = !enemyHudRect || canvasRect.height <= 0
+      ? enemyTop - 24
+      : Phaser.Math.Clamp(
+        Math.max(enemyTop - 24, hudBottom + 40),
+        80,
+        this.enemyCenterY - 32,
+      );
+    const shell = document.getElementById('game-shell');
+    if (shell && canvasRect.height > 0) {
+      const shellRect = shell.getBoundingClientRect();
+      const viewportY = canvasRect.top + y / HEIGHT * canvasRect.height;
+      const value = `${Math.round(viewportY - shellRect.top)}px`;
+      if (shell.style.getPropertyValue('--combat-feedback-y') !== value) {
+        shell.style.setProperty('--combat-feedback-y', value);
+      }
+    }
+    return y;
   }
 
   private createWrongRipple(x: number, y: number, diameter: number): void {
@@ -1069,6 +1350,15 @@ export class BubbleScene extends Phaser.Scene {
     const bounds = this.game.canvas.getBoundingClientRect();
     const pointerX = ((event.clientX - bounds.left) / bounds.width) * WIDTH;
     const pointerY = ((event.clientY - bounds.top) / bounds.height) * HEIGHT;
+    const enemyRadiusX = this.enemy.width * this.enemyRestScaleX * 0.5;
+    const enemyRadiusY = this.enemy.height * this.enemyRestScaleY * 0.48;
+    const enemyHitX = (pointerX - WIDTH / 2) / Math.max(1, enemyRadiusX);
+    const enemyHitY = (pointerY - this.enemyCenterY) / Math.max(1, enemyRadiusY);
+    if (snapshot.ultimateReady && !snapshot.ultimateActive && this.enemy.visible
+      && enemyHitX * enemyHitX + enemyHitY * enemyHitY <= 1) {
+      this.controller.activateUltimate();
+      return;
+    }
     let selectedIndex = -1;
     let selectedDistance = Number.POSITIVE_INFINITY;
 

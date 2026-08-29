@@ -46,11 +46,28 @@ export interface BubbleState {
 }
 
 export type RewardId = 'power' | 'heart' | 'shield' | 'time';
+export type RewardMode = 'standard' | 'ultimate';
+export type UltimateUpgradeId = 'blast' | 'control' | 'shield';
 
 export interface RewardChoice {
   id: RewardId;
   title: string;
   description: string;
+}
+
+export interface UltimateUpgradeChoice {
+  id: UltimateUpgradeId;
+  title: string;
+  description: string;
+  level: number;
+  maxLevel: number;
+  disabled: boolean;
+}
+
+export interface UltimateUpgradeLevels {
+  blast: number;
+  control: number;
+  shield: number;
 }
 
 export interface SessionSnapshot {
@@ -106,10 +123,21 @@ export interface SessionSnapshot {
   lastEnemyDamage: number;
   lastBlockedDamage: number;
   rewardChoices: RewardChoice[];
+  rewardMode: RewardMode;
+  ultimateEnergy: number;
+  ultimateEnergyMax: number;
+  ultimateReady: boolean;
+  ultimateActive: boolean;
+  ultimateRemainingMs: number;
+  ultimateStage: 0 | 1 | 2 | 3;
+  ultimateUpgradeLevels: UltimateUpgradeLevels;
+  ultimateUpgradeChoices: UltimateUpgradeChoice[];
 }
 
 export interface SessionUpdate {
   snapshot: SessionSnapshot;
   effect: GameEffect;
   effectIndex?: number;
+  abilityEffect?: 'ultimate-start' | 'ultimate-hit' | 'ultimate-finish' | 'ultimate-end';
+  abilityStage?: 1 | 2 | 3;
 }

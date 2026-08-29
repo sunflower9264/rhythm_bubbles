@@ -56,6 +56,14 @@ export class GameController {
     this.commit(this.session.selectReward(index));
   }
 
+  selectUltimateUpgrade(index: number): void {
+    this.commit(this.session.selectUltimateUpgrade(index));
+  }
+
+  activateUltimate(): void {
+    this.commit(this.session.activateUltimate());
+  }
+
   tick(milliseconds: number, flush = false): void {
     const snapshot = this.session.getSnapshot();
     if (!['playing', 'transition'].includes(snapshot.phase)) {
@@ -118,6 +126,8 @@ export class GameController {
     if (update.effect === 'enemy-staggered' && this.preferences.haptics) this.vibrate([10, 10, 18]);
     if (update.effect === 'mistake' && this.preferences.haptics) this.vibrate([16, 20, 16]);
     if (update.effect === 'mistake-overflow' && this.preferences.haptics) this.vibrate([20, 16, 28]);
+    if (update.abilityEffect === 'ultimate-start' && this.preferences.haptics) this.vibrate([14, 10, 20]);
+    if (update.abilityEffect === 'ultimate-finish' && this.preferences.haptics) this.vibrate([18, 12, 32]);
 
     for (const listener of this.listeners) listener(update, this.getPreferences());
   }

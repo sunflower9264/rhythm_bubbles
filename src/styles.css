@@ -929,6 +929,23 @@ input:focus-visible + i {
   background: linear-gradient(180deg, #fff4bd 0%, #c9a4ef 36%, #7358b8 100%);
 }
 
+.player-meter--energy.is-ready .player-meter-track {
+  box-shadow:
+    inset 0 2px 4px rgba(54, 80, 111, 0.1),
+    0 0 0.45rem rgba(204, 174, 255, 0.78);
+  animation: ultimate-meter-ready 900ms ease-in-out infinite alternate;
+}
+
+.player-meter--energy.is-ready strong {
+  color: #7451b4;
+  font-size: 0.52rem;
+  text-shadow: 0 0 0.35rem rgba(255, 255, 255, 0.9);
+}
+
+@keyframes ultimate-meter-ready {
+  to { filter: brightness(1.12) saturate(1.08); }
+}
+
 .player-vital.is-damaged strong {
   animation: vital-hit 420ms cubic-bezier(.2, .9, .25, 1.15);
 }
@@ -1182,6 +1199,14 @@ input:focus-visible + i {
 .reward-option:active {
   transform: translateY(4px) scale(0.985);
   box-shadow: inset 0 2px rgba(255, 255, 255, 0.45), 0 1px 0 var(--reward-edge), 0 5px 10px var(--reward-glow);
+}
+
+.reward-option:disabled {
+  cursor: default;
+  filter: grayscale(0.35) saturate(0.65);
+  opacity: 0.58;
+  transform: none;
+  box-shadow: inset 0 2px rgba(255, 255, 255, 0.42), 0 3px 0 var(--reward-edge), 0 6px 12px var(--reward-glow);
 }
 
 .reward-option > img {
@@ -1666,7 +1691,7 @@ input:focus-visible + i {
 }
 
 .level-toast.is-combat {
-  top: clamp(8rem, 22.5vh, 12.8rem);
+  top: var(--combat-feedback-y, clamp(8rem, 22.5vh, 12.8rem));
   right: auto;
   bottom: auto;
   left: 50%;
@@ -1675,7 +1700,7 @@ input:focus-visible + i {
   font-size: 0.74rem;
   line-height: 1.15;
   text-align: center;
-  transform: translate3d(-50%, 0, 0) rotate(-2deg);
+  transform: translate3d(-50%, -50%, 0);
 }
 
 .level-toast.is-combat.is-active {
@@ -1722,9 +1747,9 @@ input:focus-visible + i {
 }
 
 @keyframes combat-toast-pop {
-  0% { opacity: 0; transform: translate3d(-50%, 0.8rem, 0) scale(0.72) rotate(-4deg); visibility: visible; }
-  14%, 82% { opacity: 1; transform: translate3d(-50%, 0, 0) scale(1) rotate(-1deg); visibility: visible; }
-  100% { opacity: 0; transform: translate3d(-50%, -0.7rem, 0) scale(0.92) rotate(1deg); visibility: hidden; }
+  0% { opacity: 0; transform: translate3d(-50%, calc(-50% + 0.55rem), 0) scale(0.78); visibility: visible; }
+  14%, 82% { opacity: 1; transform: translate3d(-50%, -50%, 0) scale(1); visibility: visible; }
+  100% { opacity: 0; transform: translate3d(-50%, calc(-50% - 0.45rem), 0) scale(0.94); visibility: hidden; }
 }
 
 @keyframes battle-toast-pop {
@@ -1744,6 +1769,7 @@ input:focus-visible + i {
 
 .reduce-motion .liquid-fill::before,
 .reduce-motion .liquid-fill::after,
+.reduce-motion .player-meter--energy.is-ready .player-meter-track,
 .reduce-motion .volume-row input {
   animation: none !important;
 }
@@ -1786,6 +1812,7 @@ input:focus-visible + i {
   .reward-option span { align-content: center; min-height: 2.45rem; }
   .reward-option b { font-size: 0.78rem; line-height: 1.15; }
   .reward-option small { font-size: 0.58rem; line-height: 1.25; }
+  .level-toast.is-combat { padding: 0.32rem 0.55rem; border-width: 2px; font-size: 0.66rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1797,6 +1824,7 @@ input:focus-visible + i {
 
   .liquid-fill::before,
   .liquid-fill::after,
+  .player-meter--energy.is-ready .player-meter-track,
   .volume-row input {
     animation: none !important;
   }

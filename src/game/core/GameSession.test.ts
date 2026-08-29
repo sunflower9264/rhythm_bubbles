@@ -396,6 +396,9 @@ test('护盾奖励记录当前容量，重新开始后归零', () => {
   update = session.selectReward(shieldIndex);
   assert.equal(update.snapshot.shield, 20);
   assert.equal(update.snapshot.maxShield, 20);
+  assert.equal(update.snapshot.rewardMode, 'ultimate');
+  update = session.selectUltimateUpgrade(0);
+  assert.equal(update.snapshot.battle, 2);
   update = session.start();
   assert.equal(update.snapshot.shield, 0);
   assert.equal(update.snapshot.maxShield, 0);
@@ -405,6 +408,7 @@ test('原加时奖励改为只恢复 14 点生命', () => {
   const session = new GameSession(fixedRandom);
   let update = playUntilPhase(session, session.start(), 'reward');
   update = session.selectReward(0);
+  update = session.selectUltimateUpgrade(0);
   const wrong = update.snapshot.bubbles.find((bubble) => !bubble.isTarget)!;
   update = session.select(wrong.index);
   update = playUntilPhase(session, update, 'reward');
@@ -415,6 +419,123 @@ test('原加时奖励改为只恢复 14 点生命', () => {
   const hpBeforeReward = update.snapshot.playerHp;
   update = session.selectReward(rewardIndex);
   assert.equal(update.snapshot.playerHp, Math.min(update.snapshot.maxPlayerHp, hpBeforeReward + 14));
+});
+
+test('正确点击按连击充能，点错不充能且能量封顶 100', () => {
+  const { session } = sessionStartingWith('puffer');
+  let update = session.advanceTime(900);
+  assert.equal(update.snapshot.enemyMechanicState, 'staggered');
+  const wrong = update.snapshot.bubbles.find((bubble) => !bubble.isTarget)!;
+  update = session.select(wrong.index);
+  assert.equal(update.snapshot.ultimateEnergy, 0);
+
+  for (let guard = 0; guard < 80 && !update.snapshot.ultimateReady; guard += 1) {
+    update = playOneStep(session, update);
+  }
+  assert.equal(update.snapshot.ultimateEnergy, 100);
+  assert.equal(update.snapshot.ultimateEnergyMax, 100);
+  assert.equal(update.snapshot.ultimateReady, true);
+});
+
+test('满能量点击怪物释放五秒海啸，攻击蓄力冻结且前三次命中逐段终结破势', () => {
+  const session = new GameSession(fixedRandom);
+  let update = session.start();
+  setPrivateState(session, 'ultimateEnergy', 100);
+  update = session.advanceTime(update.snapshot.enemyAttackCooldownMs * 0.4);
+  const attackProgress = update.snapshot.enemyAttackProgress;
+  update = session.activateUltimate();
+  assert.equal(update.abilityEffect, 'ultimate-start');
+  assert.equal(update.snapshot.ultimateActive, true);
+  assert.equal(update.snapshot.ultimateEnergy, 0);
+  session.advanceTime(2000);
+  assert.ok(Math.abs(session.getSnapshot().enemyAttackProgress - attackProgress) < 0.0001);
+
+  for (const expectedStage of [1, 2, 3] as const) {
+    update = tapNextTarget(session);
+    assert.equal(update.abilityStage, expectedStage);
+    assert.equal(update.abilityEffect, expectedStage === 3 ? 'ultimate-finish' : 'ultimate-hit');
+  }
+  assert.equal(update.snapshot.enemyMechanicState, 'staggered');
+  assert.equal(update.snapshot.enemyPoise, 0);
+
+  update = session.advanceTime(3000);
+  assert.equal(update.abilityEffect, 'ultimate-end');
+  assert.equal(update.snapshot.ultimateActive, false);
+});
+
+test('死怪不显示海啸就绪，潮控可将撞击警告退回蓄力', () => {
+  const session = new GameSession(fixedRandom);
+  session.start();
+  setPrivateState(session, 'ultimateEnergy', 100);
+  setPrivateState(session, 'enemyHp', 0);
+  assert.equal(session.getSnapshot().ultimateReady, false);
+  assert.equal(session.activateUltimate().abilityEffect, undefined);
+
+  setPrivateState(session, 'enemyHp', 100);
+  setPrivateState(session, 'ultimateUpgradeLevels', { blast: 0, control: 1, shield: 0 });
+  setPrivateState(session, 'enemyAttackState', 'windup');
+  setPrivateState(session, 'enemyAttackElapsedMs', 0);
+  assert.equal(session.activateUltimate().abilityEffect, 'ultimate-start');
+  const update = tapNextTarget(session);
+  assert.equal(update.snapshot.enemyAttackState, 'charging');
+  assert.ok(update.snapshot.enemyAttackProgress <= 0.92 + 0.0001);
+  assert.ok(update.snapshot.lastAttackReduction >= 0.08);
+});
+
+test('普通奖励后复用奖励阶段选择大招升级，再进入下一战', () => {
+  const session = new GameSession(fixedRandom);
+  let update = playUntilPhase(session, session.start(), 'reward');
+  assert.equal(update.snapshot.rewardMode, 'standard');
+  assert.equal(update.snapshot.ultimateUpgradeChoices.length, 0);
+  update = session.selectReward(0);
+  assert.equal(update.snapshot.phase, 'reward');
+  assert.equal(update.snapshot.battle, 1);
+  assert.equal(update.snapshot.rewardMode, 'ultimate');
+  assert.deepEqual(update.snapshot.ultimateUpgradeChoices.map(({ id }) => id), ['blast', 'control', 'shield']);
+  update = session.selectUltimateUpgrade(1);
+  assert.equal(update.snapshot.battle, 2);
+  assert.equal(update.snapshot.phase, 'playing');
+  assert.equal(update.snapshot.ultimateUpgradeLevels.control, 1);
+});
+
+test('三条海啸升级按等级生效并封顶三级', () => {
+  const base = new GameSession(fixedRandom);
+  let update = base.start();
+  setPrivateState(base, 'ultimateEnergy', 100);
+  base.activateUltimate();
+  update = tapNextTarget(base);
+  const baseDamage = update.snapshot.lastDamage;
+
+  const upgraded = new GameSession(fixedRandom);
+  update = upgraded.start();
+  setPrivateState(upgraded, 'ultimateUpgradeLevels', { blast: 2, control: 3, shield: 3 });
+  setPrivateState(upgraded, 'ultimateEnergy', 100);
+  update = upgraded.advanceTime(update.snapshot.enemyAttackCooldownMs * 0.5);
+  const beforeProgress = update.snapshot.enemyAttackProgress;
+  update = upgraded.activateUltimate();
+  assert.equal(update.snapshot.shield, 36);
+  update = tapNextTarget(upgraded);
+  assert.ok(update.snapshot.lastDamage > baseDamage);
+  assert.ok(update.snapshot.enemyAttackProgress <= Math.max(0, beforeProgress - 0.24) + 0.0001);
+  tapNextTarget(upgraded);
+  update = tapNextTarget(upgraded);
+  assert.equal(update.snapshot.enemyAttackProgress, 0);
+  assert.equal(update.snapshot.ultimateRemainingMs, 6500);
+
+  const maxed = new GameSession(fixedRandom);
+  update = maxed.start();
+  for (let level = 1; level <= 3; level += 1) {
+    update = playUntilPhase(maxed, update, 'reward');
+    update = maxed.selectReward(0);
+    const shieldIndex = update.snapshot.ultimateUpgradeChoices.findIndex((choice) => choice.id === 'shield');
+    update = maxed.selectUltimateUpgrade(shieldIndex);
+    assert.equal(update.snapshot.ultimateUpgradeLevels.shield, level);
+  }
+  update = playUntilPhase(maxed, update, 'reward');
+  update = maxed.selectReward(0);
+  const shieldChoice = update.snapshot.ultimateUpgradeChoices.find((choice) => choice.id === 'shield')!;
+  assert.equal(shieldChoice.level, 3);
+  assert.equal(shieldChoice.disabled, true);
 });
 
 test('五战防御奖励路线在多个随机种子下可通关', () => {
@@ -475,6 +596,10 @@ function playOneStep(session: GameSession, update: SessionUpdate, preferredRewar
   const snapshot = update.snapshot;
   if (snapshot.phase === 'transition') return session.advanceTime(snapshot.enemyHp === 0 ? 800 : 420);
   if (snapshot.phase === 'reward') {
+    if (snapshot.rewardMode === 'ultimate') {
+      const choice = snapshot.ultimateUpgradeChoices.findIndex((upgrade) => !upgrade.disabled);
+      return session.selectUltimateUpgrade(choice);
+    }
     const preferred = snapshot.rewardChoices.findIndex((reward) => reward.id === preferredReward);
     return session.selectReward(preferred >= 0 ? preferred : 0);
   }
@@ -485,6 +610,18 @@ function playOneStep(session: GameSession, update: SessionUpdate, preferredRewar
   assert.notEqual(target, null);
   assert.notEqual(target, undefined);
   return session.select(target!);
+}
+
+function tapNextTarget(session: GameSession): SessionUpdate {
+  let snapshot = session.getSnapshot();
+  if (snapshot.phase === 'transition') snapshot = session.advanceTime(420).snapshot;
+  const target = snapshot.bubbles.find((bubble) => bubble.isTarget && !bubble.cleared);
+  assert.ok(target);
+  return session.select(target.index);
+}
+
+function setPrivateState(session: GameSession, key: string, value: unknown): void {
+  (session as unknown as Record<string, unknown>)[key] = value;
 }
 
 function playUntilBattle(session: GameSession, battle: number, initial?: SessionUpdate): SessionUpdate {

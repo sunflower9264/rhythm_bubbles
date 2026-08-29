@@ -1,6 +1,19 @@
 import { BATTLE_STATS, createEnemyOrder, ENEMY_ARCHETYPES, getEnemyArchetype } from './enemies';
 import { BOARD_COLS, BOARD_ROWS, createBubbles, createLevelConfig, createSeededRandom, type RandomSource } from './level';
-import type { BubbleState, EnemyAttackState, EnemyId, EnemyMechanicState, GamePhase, RewardChoice, RewardId, SessionSnapshot, SessionUpdate } from './types';
+import type {
+  BubbleState,
+  EnemyAttackState,
+  EnemyId,
+  EnemyMechanicState,
+  GamePhase,
+  RewardChoice,
+  RewardId,
+  RewardMode,
+  SessionSnapshot,
+  SessionUpdate,
+  UltimateUpgradeChoice,
+  UltimateUpgradeLevels,
+} from './types';
 
 const NEXT_BOARD_MS = 420;
 const RESULT_TRANSITION_MS = 800;
@@ -12,12 +25,27 @@ const BOARD_CLEAR_ATTACK_REDUCTION = 0.005;
 const COMBO_WINDOW_MS = 1000;
 const BASE_PLAYER_HP = 100;
 const BASE_ATTACK_POWER = 8;
+const ULTIMATE_ENERGY_MAX = 100;
+const ULTIMATE_BASE_DURATION_MS = 5000;
+const ULTIMATE_CONTROL_DURATION_MS = 500;
+const ULTIMATE_BASE_DAMAGE_MULTIPLIER = 1.5;
+const ULTIMATE_BLAST_DAMAGE_BONUS = 0.25;
+const ULTIMATE_CONTROL_REDUCTION = 0.08;
+const ULTIMATE_SHIELD_GAIN = 12;
+const ULTIMATE_SHIELD_FINISH_HEAL = 8;
+const ULTIMATE_UPGRADE_MAX_LEVEL = 3;
 
 const REWARDS: RewardChoice[] = [
   { id: 'power', title: '泡泡利刃', description: '每次正确点击伤害 +2' },
   { id: 'heart', title: '果冻心', description: '最大生命 +12，并恢复 18 点' },
   { id: 'shield', title: '糖霜护盾', description: '获得 20 点护盾，优先抵挡伤害' },
   { id: 'time', title: '回响钟摆', description: '恢复 14 点生命' },
+];
+
+const ULTIMATE_UPGRADES: Omit<UltimateUpgradeChoice, 'level' | 'disabled'>[] = [
+  { id: 'blast', title: '爆裂潮汐', description: '海啸伤害提高 25%', maxLevel: ULTIMATE_UPGRADE_MAX_LEVEL },
+  { id: 'control', title: '回流潮控', description: '海啸延长 0.5 秒，每段回退怪物蓄力', maxLevel: ULTIMATE_UPGRADE_MAX_LEVEL },
+  { id: 'shield', title: '潮生泡盾', description: '释放时获得 12 点护盾', maxLevel: ULTIMATE_UPGRADE_MAX_LEVEL },
 ];
 
 type TransitionTarget = 'next-board' | 'reward' | 'victory';
@@ -44,6 +72,13 @@ export class GameSession {
   private comboElapsedMs = 0;
   private enemyHp = 0;
   private rewardChoices: RewardChoice[] = [];
+  private rewardMode: RewardMode = 'standard';
+  private ultimateEnergy = 0;
+  private ultimateActive = false;
+  private ultimateElapsedMs = 0;
+  private ultimateStage: 0 | 1 | 2 | 3 = 0;
+  private ultimateUpgradeLevels: UltimateUpgradeLevels = { blast: 0, control: 0, shield: 0 };
+  private ultimateUpgradeChoices: UltimateUpgradeChoice[] = [];
   private lastDamage = 0;
   private lastEnemyDamage = 0;
   private lastBlockedDamage = 0;
@@ -74,6 +109,13 @@ export class GameSession {
     this.resetCombo();
     this.lastTargetCount = 0;
     this.rewardChoices = [];
+    this.rewardMode = 'standard';
+    this.ultimateEnergy = 0;
+    this.ultimateActive = false;
+    this.ultimateElapsedMs = 0;
+    this.ultimateStage = 0;
+    this.ultimateUpgradeLevels = { blast: 0, control: 0, shield: 0 };
+    this.ultimateUpgradeChoices = [];
     this.mistakeCount = 0;
     this.lastAttackReduction = 0;
     this.previousPhase = null;
@@ -95,15 +137,43 @@ export class GameSession {
   }
 
   selectReward(index: number): SessionUpdate {
-    if (this.phase !== 'reward') return this.update('none');
+    if (this.phase !== 'reward' || this.rewardMode !== 'standard') return this.update('none');
     const reward = this.rewardChoices[index];
     if (!reward) return this.update('none');
     this.applyReward(reward.id);
     this.rewardChoices = [];
+    this.rewardMode = 'ultimate';
+    this.ultimateUpgradeChoices = this.createUltimateUpgradeChoices();
+    return this.update('reward-picked');
+  }
+
+  selectUltimateUpgrade(index: number): SessionUpdate {
+    if (this.phase !== 'reward' || this.rewardMode !== 'ultimate') return this.update('none');
+    const upgrade = this.ultimateUpgradeChoices[index];
+    if (!upgrade || upgrade.disabled) return this.update('none');
+    this.ultimateUpgradeLevels[upgrade.id] += 1;
+    this.ultimateUpgradeChoices = [];
+    this.rewardMode = 'standard';
     this.battle += 1;
     this.level = this.battle;
     this.loadBattle();
     return this.update('reward-picked');
+  }
+
+  activateUltimate(): SessionUpdate {
+    if (this.phase !== 'playing' || this.enemyHp === 0 || this.ultimateEnergy < ULTIMATE_ENERGY_MAX || this.ultimateActive) {
+      return this.update('none');
+    }
+    this.ultimateEnergy = 0;
+    this.ultimateActive = true;
+    this.ultimateElapsedMs = 0;
+    this.ultimateStage = 0;
+    const shieldGain = this.ultimateUpgradeLevels.shield * ULTIMATE_SHIELD_GAIN;
+    if (shieldGain > 0) {
+      this.shield += shieldGain;
+      this.maxShield = Math.max(this.maxShield, this.shield);
+    }
+    return this.update('none', undefined, 'ultimate-start');
   }
 
   pause(): SessionUpdate {
@@ -131,19 +201,24 @@ export class GameSession {
     const enemy = this.currentEnemy();
     const mechanic = enemy.mechanic;
     const intentIndex = this.getExpectedIntentIndex();
-    if (this.enemyMechanicState === 'active' && mechanic === 'guard') {
+    const correct = bubble.isTarget;
+    const bypassMechanic = this.ultimateActive && correct;
+    if (!bypassMechanic && this.enemyMechanicState === 'active' && mechanic === 'guard') {
       this.resetCombo();
       this.applyPlayerDamage(Math.ceil(enemy.attack * 0.6));
       this.resetEnemyMechanic();
-      if (this.playerHp === 0) this.phase = 'game-over';
+      if (this.playerHp === 0) {
+        this.phase = 'game-over';
+        this.resetUltimate();
+      }
       return this.finishBubbleTap('counter-miss', index);
     }
-    if (this.enemyMechanicState === 'active' && mechanic === 'capture' && index === intentIndex) {
+    if (!bypassMechanic && this.enemyMechanicState === 'active' && mechanic === 'capture' && index === intentIndex) {
       this.performCounterHit();
       this.resetEnemyMechanic();
       return this.finishBubbleTap('enemy-countered', index);
     }
-    if (this.enemyMechanicState === 'active' && mechanic === 'shell'
+    if (!bypassMechanic && this.enemyMechanicState === 'active' && mechanic === 'shell'
       && this.enemyIntentTargets.slice(this.enemyIntentCursor).includes(index)) {
       const selectedPosition = this.enemyIntentTargets.indexOf(index, this.enemyIntentCursor);
       [this.enemyIntentTargets[this.enemyIntentCursor], this.enemyIntentTargets[selectedPosition]] = [
@@ -163,7 +238,7 @@ export class GameSession {
       }
       return this.finishBubbleTap('enemy-break', index);
     }
-    if (this.enemyMechanicState === 'active' && mechanic === 'sequence' && index === intentIndex) {
+    if (!bypassMechanic && this.enemyMechanicState === 'active' && mechanic === 'sequence' && index === intentIndex) {
       this.performCounterHit();
       this.enemyIntentCursor += 1;
       if (this.enemyIntentCursor < this.enemyIntentTargets.length) return this.finishBubbleTap('enemy-countered', index);
@@ -181,25 +256,30 @@ export class GameSession {
       }
       return this.finishBubbleTap('enemy-countered', index);
     }
-    if (this.enemyMechanicState === 'active' && mechanic === 'sequence'
+    if (!bypassMechanic && this.enemyMechanicState === 'active' && mechanic === 'sequence'
       && this.enemyIntentTargets.includes(index) && index !== intentIndex) {
       this.resetCombo();
       this.mistakeCount += 1;
       this.applyPlayerDamage(Math.ceil(this.getMistakeDamage() * 0.5));
-      if (this.playerHp === 0) this.phase = 'game-over';
+      if (this.playerHp === 0) {
+        this.phase = 'game-over';
+        this.resetUltimate();
+      }
       return this.finishBubbleTap('counter-miss', index);
     }
-    if (this.enemyMechanicState === 'active' && mechanic === 'sweep'
+    if (!bypassMechanic && this.enemyMechanicState === 'active' && mechanic === 'sweep'
       && bubble.row === this.enemyHazardRow && !bubble.isTarget) {
       this.resetCombo();
       this.mistakeCount += 1;
       this.applyPlayerDamage(Math.ceil(enemy.attack * 0.6));
       this.resetEnemyMechanic();
-      if (this.playerHp === 0) this.phase = 'game-over';
+      if (this.playerHp === 0) {
+        this.phase = 'game-over';
+        this.resetUltimate();
+      }
       return this.finishBubbleTap('counter-miss', index);
     }
 
-    const correct = bubble.isTarget;
     if (!correct) {
       this.resetCombo();
       this.mistakeCount += 1;
@@ -208,7 +288,10 @@ export class GameSession {
         const cooldown = this.currentEnemy().cooldownMs;
         this.enemyAttackElapsedMs = Math.min(cooldown - 1, this.enemyAttackElapsedMs + cooldown * 0.2);
       }
-      if (this.playerHp === 0) this.phase = 'game-over';
+      if (this.playerHp === 0) {
+        this.phase = 'game-over';
+        this.resetUltimate();
+      }
       return this.finishBubbleTap('mistake', index);
     }
 
@@ -216,10 +299,14 @@ export class GameSession {
     this.score += 10;
     this.combo += 1;
     this.comboElapsedMs = 0;
+    this.chargeUltimate();
     const staggerMultiplier = this.enemyMechanicState === 'staggered' ? (mechanic === 'shell' ? 1.75 : 1.5) : 1;
     const armorMultiplier = mechanic === 'shell' && this.enemyMechanicState !== 'staggered' ? 0.5 : 1;
+    const ultimateMultiplier = this.ultimateActive
+      ? ULTIMATE_BASE_DAMAGE_MULTIPLIER + this.ultimateUpgradeLevels.blast * ULTIMATE_BLAST_DAMAGE_BONUS
+      : 1;
     this.lastDamage = Math.max(1, Math.round(
-      (this.attackPower + Math.min(3, this.combo - 1)) * staggerMultiplier * armorMultiplier,
+      (this.attackPower + Math.min(3, this.combo - 1)) * staggerMultiplier * armorMultiplier * ultimateMultiplier,
     ));
     this.enemyHp = Math.max(0, this.enemyHp - this.lastDamage);
     let counterEffect: SessionUpdate['effect'] | null = null;
@@ -236,26 +323,34 @@ export class GameSession {
         counterEffect = 'enemy-countered';
       }
     }
+    const abilityStage = this.advanceUltimateStage();
+    const abilityEffect = abilityStage === 3 ? 'ultimate-finish' : abilityStage > 0 ? 'ultimate-hit' : undefined;
 
     // A broken enemy stays on the field until the current bubble board is fully
     // cleared. This keeps the player's target-completion rhythm intact instead
     // of opening the reward modal in the middle of a board.
     if (this.enemyHp === 0 && this.getRemainingTargets() === 0) {
       this.beginTransition(this.battle === ENEMY_ARCHETYPES.length ? 'victory' : 'reward');
-      return this.update('encounter-win', index);
+      return this.update('encounter-win', index, abilityEffect, abilityStage || undefined);
     }
 
     if (this.getRemainingTargets() === 0) {
       this.beginTransition('next-board');
-      return this.update('board-clear', index);
+      return this.update('board-clear', index, abilityEffect, abilityStage || undefined);
     }
 
-    return this.finishBubbleTap(counterEffect ?? (this.lastAttackReduction > 0 ? 'enemy-staggered' : 'correct'), index);
+    return this.finishBubbleTap(
+      counterEffect ?? (this.lastAttackReduction > 0 ? 'enemy-staggered' : 'correct'),
+      index,
+      abilityEffect,
+      abilityStage || undefined,
+    );
   }
 
   advanceTime(milliseconds: number): SessionUpdate {
     let remaining = Math.max(0, milliseconds);
     let effect: SessionUpdate['effect'] = 'none';
+    let abilityEffect: SessionUpdate['abilityEffect'];
 
     while (remaining > 0) {
       const step = Math.min(remaining, 50);
@@ -267,10 +362,14 @@ export class GameSession {
           if (this.comboElapsedMs >= COMBO_WINDOW_MS) this.resetCombo();
         }
 
+        const ultimateWasActive = this.ultimateActive;
+        if (ultimateWasActive && this.advanceUltimate(step)) abilityEffect = 'ultimate-end';
         const mechanicEffect = this.advanceEnemyMechanic(step);
         if (mechanicEffect !== 'none') effect = mechanicEffect;
-        const attackEffect = this.advanceEnemyAttack(step);
-        if (attackEffect !== 'none') effect = attackEffect;
+        if (!ultimateWasActive) {
+          const attackEffect = this.advanceEnemyAttack(step);
+          if (attackEffect !== 'none') effect = attackEffect;
+        }
         if (this.playerHp === 0) break;
       } else if (this.phase === 'transition') {
         this.transitionElapsedMs += step;
@@ -281,6 +380,8 @@ export class GameSession {
             effect = 'next-round';
           } else if (this.transitionTarget === 'reward') {
             this.rewardChoices = this.createRewardChoices();
+            this.rewardMode = 'standard';
+            this.ultimateUpgradeChoices = [];
             this.phase = 'reward';
             effect = 'reward';
           } else {
@@ -293,7 +394,7 @@ export class GameSession {
       }
     }
 
-    return this.update(effect);
+    return this.update(effect, undefined, abilityEffect);
   }
 
   getSnapshot(): SessionSnapshot {
@@ -351,6 +452,15 @@ export class GameSession {
       lastEnemyDamage: this.lastEnemyDamage,
       lastBlockedDamage: this.lastBlockedDamage,
       rewardChoices: this.rewardChoices.map((choice) => ({ ...choice })),
+      rewardMode: this.rewardMode,
+      ultimateEnergy: this.ultimateEnergy,
+      ultimateEnergyMax: ULTIMATE_ENERGY_MAX,
+      ultimateReady: this.enemyHp > 0 && this.ultimateEnergy >= ULTIMATE_ENERGY_MAX && !this.ultimateActive,
+      ultimateActive: this.ultimateActive,
+      ultimateRemainingMs: this.ultimateActive ? Math.max(0, this.getUltimateDurationMs() - this.ultimateElapsedMs) : 0,
+      ultimateStage: this.ultimateStage,
+      ultimateUpgradeLevels: { ...this.ultimateUpgradeLevels },
+      ultimateUpgradeChoices: this.ultimateUpgradeChoices.map((choice) => ({ ...choice })),
     };
   }
 
@@ -386,6 +496,7 @@ export class GameSession {
 
   private beginTransition(target: TransitionTarget): void {
     this.resetEnemyMechanic();
+    if (target !== 'next-board') this.resetUltimate();
     this.phase = 'transition';
     this.transitionTarget = target;
     this.transitionElapsedMs = 0;
@@ -418,7 +529,10 @@ export class GameSession {
       this.applyPlayerDamage(enemy.attack);
       this.enemyAttackState = 'recovery';
       this.enemyAttackElapsedMs = 0;
-      if (this.playerHp === 0) this.phase = 'game-over';
+      if (this.playerHp === 0) {
+        this.phase = 'game-over';
+        this.resetUltimate();
+      }
       return 'enemy-impact';
     }
 
@@ -519,11 +633,16 @@ export class GameSession {
     return this.lastTargetCount + 3;
   }
 
-  private finishBubbleTap(effect: SessionUpdate['effect'], index: number): SessionUpdate {
+  private finishBubbleTap(
+    effect: SessionUpdate['effect'],
+    index: number,
+    abilityEffect?: SessionUpdate['abilityEffect'],
+    abilityStage?: SessionUpdate['abilityStage'],
+  ): SessionUpdate {
     if (this.phase === 'playing' && this.getRemainingTargets() > 0 && this.boardTapCount >= this.getBoardTapLimit()) {
       this.beginTransition('next-board');
     }
-    return this.update(effect, index);
+    return this.update(effect, index, abilityEffect, abilityStage);
   }
 
   private activateEnemyMechanic(): void {
@@ -559,6 +678,7 @@ export class GameSession {
     this.score += 10;
     this.combo += 1;
     this.comboElapsedMs = 0;
+    this.chargeUltimate();
     this.lastDamage = Math.max(4, Math.floor(this.attackPower * 0.5));
     this.enemyHp = Math.max(0, this.enemyHp - this.lastDamage);
   }
@@ -571,6 +691,77 @@ export class GameSession {
     const offset = (this.battle - 1) % REWARDS.length;
     return [REWARDS[offset], REWARDS[(offset + 1) % REWARDS.length], REWARDS[(offset + 2) % REWARDS.length]]
       .map((reward) => this.contextualizeReward(reward));
+  }
+
+  private createUltimateUpgradeChoices(): UltimateUpgradeChoice[] {
+    return ULTIMATE_UPGRADES.map((upgrade) => {
+      const level = this.ultimateUpgradeLevels[upgrade.id];
+      const nextLevel = Math.min(upgrade.maxLevel, level + 1);
+      let description = upgrade.description;
+      if (upgrade.id === 'control') {
+        description = `持续 +0.5 秒，每段蓄力 -${nextLevel * ULTIMATE_CONTROL_REDUCTION * 100}%${nextLevel === 3 ? '，终结清空蓄力' : ''}`;
+      }
+      if (upgrade.id === 'shield') {
+        description = `释放时护盾 +12${nextLevel === 3 ? '，终结恢复 8 点生命' : ''}`;
+      }
+      return { ...upgrade, description, level, disabled: level >= upgrade.maxLevel };
+    });
+  }
+
+  private chargeUltimate(): void {
+    if (this.ultimateActive) return;
+    const gain = 8 + Math.min(4, Math.max(0, this.combo - 1));
+    this.ultimateEnergy = Math.min(ULTIMATE_ENERGY_MAX, this.ultimateEnergy + gain);
+  }
+
+  private getUltimateDurationMs(): number {
+    return ULTIMATE_BASE_DURATION_MS + this.ultimateUpgradeLevels.control * ULTIMATE_CONTROL_DURATION_MS;
+  }
+
+  private advanceUltimate(milliseconds: number): boolean {
+    this.ultimateElapsedMs += milliseconds;
+    if (this.ultimateElapsedMs < this.getUltimateDurationMs()) return false;
+    this.resetUltimate();
+    return true;
+  }
+
+  private advanceUltimateStage(): 0 | 1 | 2 | 3 {
+    if (!this.ultimateActive || this.ultimateStage >= 3) return 0;
+    this.ultimateStage = (this.ultimateStage + 1) as 1 | 2 | 3;
+    const controlLevel = this.ultimateUpgradeLevels.control;
+    if (controlLevel > 0) {
+      const reduction = ULTIMATE_CONTROL_REDUCTION * controlLevel;
+      if (this.enemyAttackState === 'windup') {
+        this.enemyAttackState = 'charging';
+        this.enemyAttackElapsedMs = (1 - reduction) * this.currentEnemy().cooldownMs;
+        this.lastAttackReduction += reduction;
+      } else {
+        this.lastAttackReduction += this.weakenEnemyAttack(reduction);
+      }
+    }
+    if (this.ultimateStage === 3) {
+      this.enemyMechanicState = 'staggered';
+      this.enemyMechanicElapsedMs = 0;
+      this.enemyPoise = 0;
+      this.enemyIntentTargets = [];
+      this.enemyIntentCursor = 0;
+      this.enemyHazardRow = null;
+      if (controlLevel >= ULTIMATE_UPGRADE_MAX_LEVEL) {
+        const previousProgress = this.getEnemyAttackProgress();
+        this.resetEnemyAttack();
+        this.lastAttackReduction += previousProgress;
+      }
+      if (this.ultimateUpgradeLevels.shield >= ULTIMATE_UPGRADE_MAX_LEVEL) {
+        this.playerHp = Math.min(this.maxPlayerHp, this.playerHp + ULTIMATE_SHIELD_FINISH_HEAL);
+      }
+    }
+    return this.ultimateStage;
+  }
+
+  private resetUltimate(): void {
+    this.ultimateActive = false;
+    this.ultimateElapsedMs = 0;
+    this.ultimateStage = 0;
   }
 
   private contextualizeReward(reward: RewardChoice): RewardChoice {
@@ -595,7 +786,12 @@ export class GameSession {
     }
   }
 
-  private update(effect: SessionUpdate['effect'], effectIndex?: number): SessionUpdate {
-    return { snapshot: this.getSnapshot(), effect, effectIndex };
+  private update(
+    effect: SessionUpdate['effect'],
+    effectIndex?: number,
+    abilityEffect?: SessionUpdate['abilityEffect'],
+    abilityStage?: SessionUpdate['abilityStage'],
+  ): SessionUpdate {
+    return { snapshot: this.getSnapshot(), effect, effectIndex, abilityEffect, abilityStage };
   }
 }

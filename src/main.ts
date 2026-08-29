@@ -26,6 +26,10 @@ const GAME_RESOURCES = [
   'art/ui/reward-heart.png',
   'art/ui/reward-shield.png',
   'art/ui/reward-time.png',
+  'art/ui/skill-ultimate.png',
+  'art/ui/skill-blast.png',
+  'art/ui/skill-control.png',
+  'art/ui/skill-shield.png',
   'art/ui/result-defeat.png',
   'art/ui/result-victory.png',
   'art/bubble-garden.webp',
@@ -142,8 +146,19 @@ window.render_game_to_text = () => {
         mistakeDamage: snapshot.mistakeDamage,
         mistakes: snapshot.mistakeCount,
         mistakeLimit: snapshot.mistakeLimit,
+        ultimate: {
+          energy: snapshot.ultimateEnergy,
+          maxEnergy: snapshot.ultimateEnergyMax,
+          ready: snapshot.ultimateReady,
+          active: snapshot.ultimateActive,
+          remainingMs: Math.round(snapshot.ultimateRemainingMs),
+          stage: snapshot.ultimateStage,
+          upgrades: snapshot.ultimateUpgradeLevels,
+        },
       },
       rewards: snapshot.rewardChoices,
+      rewardMode: snapshot.rewardMode,
+      ultimateUpgrades: snapshot.ultimateUpgradeChoices,
     },
     grid: { rows: snapshot.rows, cols: snapshot.cols },
     remainingTargets: snapshot.remainingTargets,
@@ -166,6 +181,8 @@ window.advanceTime = (milliseconds: number) => {
 window.startGame = () => controller.start();
 window.selectBubble = (index: number) => controller.select(index);
 window.selectReward = (index: number) => controller.selectReward(index);
+window.selectUltimateUpgrade = (index: number) => controller.selectUltimateUpgrade(index);
+window.activateUltimate = () => controller.activateUltimate();
 
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => undefined));
@@ -188,5 +205,7 @@ declare global {
     startGame: () => void;
     selectBubble: (index: number) => void;
     selectReward: (index: number) => void;
+    selectUltimateUpgrade: (index: number) => void;
+    activateUltimate: () => void;
   }
 }

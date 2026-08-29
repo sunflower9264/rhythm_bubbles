@@ -26,6 +26,7 @@ export class AppUI {
   private loadingProgress = 0;
   private resourcesReady = false;
   private menuEnemyIndex = -1;
+  private lastRewardSelectionAt = 0;
 
   constructor(private readonly controller: GameController, root: HTMLElement) {
     this.root = root;
@@ -52,7 +53,17 @@ export class AppUI {
     this.onClick('#bestiary-close', () => this.closeBestiary());
 
     this.root.querySelectorAll<HTMLButtonElement>('[data-reward-index]').forEach((button) => {
-      button.addEventListener('click', () => this.controller.selectReward(Number(button.dataset.rewardIndex)));
+      button.addEventListener('click', () => {
+        const now = performance.now();
+        if (now - this.lastRewardSelectionAt < 300) return;
+        this.lastRewardSelectionAt = now;
+        const choiceIndex = Number(button.dataset.rewardIndex);
+        if (this.latestSnapshot.rewardMode === 'ultimate') {
+          this.controller.selectUltimateUpgrade(choiceIndex);
+          return;
+        }
+        this.controller.selectReward(choiceIndex);
+      });
     });
 
     this.root.querySelectorAll<HTMLInputElement>('input[type="checkbox"][data-preference]').forEach((input) => {
@@ -130,11 +141,17 @@ export class AppUI {
     }
     const shieldRatio = snapshot.maxShield > 0 ? snapshot.shield / snapshot.maxShield : 0;
     this.style('#player-shield-fill', 'width', `${Math.max(0, Math.min(1, shieldRatio)) * 100}%`);
-    const energyRatio = snapshot.targetCount > 0
-      ? (snapshot.targetCount - snapshot.remainingTargets) / snapshot.targetCount
+    const energyRatio = snapshot.ultimateEnergyMax > 0
+      ? snapshot.ultimateEnergy / snapshot.ultimateEnergyMax
       : 0;
     this.style('#player-energy-fill', 'width', `${Math.max(0, Math.min(1, energyRatio)) * 100}%`);
-    this.text('#player-energy-value', `${Math.round(Math.max(0, Math.min(1, energyRatio)) * 100)}%`);
+    this.text('#player-energy-value', snapshot.ultimateReady ? '点怪物' : `${Math.round(Math.max(0, Math.min(1, energyRatio)) * 100)}%`);
+    const energyMeter = this.get('.player-meter--energy');
+    energyMeter.classList.toggle('is-ready', snapshot.ultimateReady);
+    const energyLabel = snapshot.ultimateReady
+      ? '泡泡海啸已就绪，点击怪物释放'
+      : `泡泡海啸能量 ${Math.round(Math.max(0, Math.min(1, energyRatio)) * 100)}%`;
+    if (energyMeter.getAttribute('aria-label') !== energyLabel) energyMeter.setAttribute('aria-label', energyLabel);
     this.renderTargetBubbles(snapshot.remainingTargets);
     this.get('#enemy-status').classList.toggle('is-boss', snapshot.enemyIsBoss);
     this.get('#enemy-status').classList.toggle('is-windup', snapshot.enemyAttackState === 'windup');
@@ -151,14 +168,14 @@ export class AppUI {
     this.style(comboBurst, '--combo-progress', `${Math.max(0, Math.min(1, comboProgress)) * 100}%`);
 
     const attackIntent = this.get('#enemy-attack-intent');
-    const attackFrozen = ['paused', 'reward', 'transition'].includes(snapshot.phase);
+    const attackFrozen = snapshot.ultimateActive || ['paused', 'reward', 'transition'].includes(snapshot.phase);
     const attackLabel = snapshot.enemyHp === 0
       ? '攻击已停止'
       : snapshot.enemyAttackState === 'windup'
         ? '撞击警告'
         : snapshot.enemyAttackState === 'recovery'
           ? '撞击恢复'
-          : attackFrozen ? '攻击暂停' : '撞击蓄力';
+          : snapshot.ultimateActive ? '海啸压制' : attackFrozen ? '攻击暂停' : '撞击蓄力';
     this.text('#enemy-attack-label', attackLabel);
     this.style(attackIntent, '--attack-progress', `${snapshot.enemyAttackProgress * 100}%`);
     attackIntent.classList.toggle('is-windup', snapshot.enemyAttackState === 'windup');
@@ -178,12 +195,29 @@ export class AppUI {
 
     this.text('#best-run', String(this.controller.getBestScore()));
 
-    snapshot.rewardChoices.forEach((choice, index) => {
+    const isUltimateUpgrade = snapshot.rewardMode === 'ultimate';
+    const choiceMode = isUltimateUpgrade ? 'ultimate' : 'standard';
+    if (reward.dataset.choiceMode !== choiceMode) reward.dataset.choiceMode = choiceMode;
+    this.text('#reward-kicker', isUltimateUpgrade ? '海啸进化 · 选择一个' : '战斗胜利 · 选择一个');
+    this.text('#reward-title', isUltimateUpgrade ? '强化泡泡海啸' : '强化泡泡');
+    this.text('#reward-copy', isUltimateUpgrade ? '本轮持续生效，每条路线最高 3 级。' : '奖励会保留到本轮挑战结束。');
+    const rewardChoices = isUltimateUpgrade ? snapshot.ultimateUpgradeChoices : snapshot.rewardChoices;
+    rewardChoices.forEach((choice, index) => {
+      const button = this.get<HTMLButtonElement>(`#reward-option-${index}`);
       const icon = this.get<HTMLImageElement>(`#reward-icon-${index}`);
-      const src = `art/ui/reward-${choice.id}.png`;
+      const src = isUltimateUpgrade ? `art/ui/skill-${choice.id}.png` : `art/ui/reward-${choice.id}.png`;
       if (!icon.src.endsWith(src)) icon.src = src;
       this.text(`#reward-title-${index}`, choice.title);
       this.text(`#reward-description-${index}`, choice.description);
+      if (isUltimateUpgrade) {
+        const upgrade = snapshot.ultimateUpgradeChoices[index];
+        const isMaxed = upgrade.disabled || upgrade.level >= upgrade.maxLevel;
+        button.disabled = isMaxed;
+        this.text(`#reward-action-${index}`, isMaxed ? '已满级' : `Lv.${upgrade.level} → ${upgrade.level + 1}`);
+      } else {
+        button.disabled = false;
+        this.text(`#reward-action-${index}`, '选择');
+      }
     });
 
     if (update.effect === 'start') this.get('#level-toast').classList.remove('is-active', 'is-combat', 'is-battle');
@@ -471,9 +505,9 @@ export class AppUI {
 
       <section id="reward-modal" class="modal modal--reward" role="dialog" aria-modal="true" aria-labelledby="reward-title">
         <div class="modal-card reward-card">
-          <span class="modal-kicker">战斗胜利 · 选择一个</span><h2 id="reward-title">强化泡泡</h2><p>奖励会保留到本轮挑战结束。</p>
+          <span id="reward-kicker" class="modal-kicker">战斗胜利 · 选择一个</span><h2 id="reward-title">强化泡泡</h2><p id="reward-copy">奖励会保留到本轮挑战结束。</p>
           <div class="reward-list">
-            ${[0, 1, 2].map((index) => `<button class="reward-option" data-reward-index="${index}" type="button"><img id="reward-icon-${index}" src="art/ui/reward-power.png" alt=""><span><b id="reward-title-${index}">泡泡利刃</b><small id="reward-description-${index}">提高攻击力</small></span><em>选择</em></button>`).join('')}
+            ${[0, 1, 2].map((index) => `<button id="reward-option-${index}" class="reward-option" data-reward-index="${index}" type="button"><img id="reward-icon-${index}" src="art/ui/reward-power.png" alt=""><span><b id="reward-title-${index}">泡泡利刃</b><small id="reward-description-${index}">提高攻击力</small></span><em id="reward-action-${index}">选择</em></button>`).join('')}
           </div>
         </div>
       </section>
