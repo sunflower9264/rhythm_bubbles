@@ -164,10 +164,11 @@ input:focus-visible + i {
 
 .loading-progress-wrap {
   position: absolute;
-  right: max(1.6rem, env(safe-area-inset-right));
-  bottom: max(1.8rem, calc(env(safe-area-inset-bottom) + 1rem));
-  left: max(1.6rem, env(safe-area-inset-left));
+  top: 50%;
+  left: 50%;
+  width: min(calc(100% - 3.2rem), 22rem);
   z-index: 16;
+  transform: translate(-50%, -50%);
   filter: drop-shadow(0 7px 15px rgba(3, 22, 65, 0.62));
 }
 
@@ -1708,7 +1709,7 @@ input:focus-visible + i {
   .mode-list { gap: 0.42rem; }
   .mode-card { min-height: 4.25rem; padding-block: 0.5rem; }
   .menu-actions { gap: 1.05rem; margin-top: 2rem; }
-  .loading-progress-wrap { bottom: max(1rem, env(safe-area-inset-bottom)); }
+  .loading-progress-wrap { width: min(calc(100% - 2.4rem), 22rem); }
 }
 
 @media (prefers-reduced-motion: reduce) {
