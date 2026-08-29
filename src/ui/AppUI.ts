@@ -50,8 +50,10 @@ export class AppUI {
     this.onClick('#gameover-home', () => this.controller.home());
     this.onClick('#victory-home', () => this.controller.home());
     this.onClick('#menu-settings', () => this.openSettings());
+    this.onClick('#menu-bestiary', () => this.openBestiary());
     this.onClick('#pause-settings', () => this.openSettings());
     this.onClick('#settings-close', () => this.closeSettings());
+    this.onClick('#bestiary-close', () => this.closeBestiary());
 
     this.root.querySelectorAll<HTMLButtonElement>('[data-reward-index]').forEach((button) => {
       button.addEventListener('click', () => this.controller.selectReward(Number(button.dataset.rewardIndex)));
@@ -234,6 +236,16 @@ export class AppUI {
     this.get<HTMLButtonElement>('#settings-close').focus();
   }
 
+  private openBestiary(): void {
+    this.get('#bestiary-modal').classList.add('is-visible');
+    this.get<HTMLButtonElement>('#bestiary-close').focus();
+  }
+
+  private closeBestiary(): void {
+    this.get('#bestiary-modal').classList.remove('is-visible');
+    this.get<HTMLButtonElement>('#menu-bestiary').focus();
+  }
+
   setLoadingProgress(progress: number): void {
     this.loadingProgress = Math.max(this.loadingProgress, Math.min(1, progress));
     this.get('#loading-progress-fill').style.width = `${this.loadingProgress * 100}%`;
@@ -387,7 +399,8 @@ export class AppUI {
         </header>
         <div class="menu-actions">
           <button id="start-game" class="primary-button menu-start" type="button">开始游戏</button>
-          <button id="menu-settings" class="menu-utility-button" type="button">设置</button>
+          <button id="menu-bestiary" class="menu-utility-button menu-bestiary-button" type="button">怪物图鉴</button>
+          <button id="menu-settings" class="menu-utility-button" type="button">游戏设置</button>
         </div>
         <div id="menu-encounter" class="menu-encounter" data-enemy="jelly" aria-hidden="true">
           <div class="menu-bubble-squad">
@@ -431,7 +444,7 @@ export class AppUI {
         <div class="modal-card modal-card--pause">
           <span class="modal-kicker">慢慢呼吸</span><h2 id="pause-title">暂停一下</h2><p>泡泡会在这里等你。</p>
           <button id="resume-button" class="primary-button" type="button">继续游戏</button>
-          <div class="button-row"><button id="restart-button" class="secondary-button" type="button">重新开始</button><button id="pause-settings" class="secondary-button" type="button">设置</button></div>
+          <div class="button-row"><button id="restart-button" class="secondary-button" type="button">重新开始</button><button id="pause-settings" class="secondary-button" type="button">游戏设置</button></div>
           <button id="pause-home" class="text-button" type="button">返回主菜单</button>
         </div>
       </section>
@@ -473,6 +486,19 @@ export class AppUI {
           <label class="volume-row" for="music-volume"><span><b>音乐音量</b><small>拖动调整背景音乐响度</small></span><output id="music-volume-value" for="music-volume">40%</output><input id="music-volume" type="range" min="0" max="100" step="1" value="40" style="--volume-progress: 40%" aria-label="音乐音量"></label>
           <label class="setting-row"><span><b>触感反馈</b><small>支持设备上的轻微振动</small></span><input type="checkbox" data-preference="haptics"><i></i></label>
           <label class="setting-row"><span><b>减少动态效果</b><small>减少弹跳、粒子和震动</small></span><input type="checkbox" data-preference="reducedMotion"><i></i></label>
+        </div>
+      </section>
+
+      <section id="bestiary-modal" class="modal modal--bestiary" role="dialog" aria-modal="true" aria-labelledby="bestiary-title">
+        <div class="modal-card bestiary-card">
+          <div class="modal-heading"><div><span class="modal-kicker">认识你的对手</span><h2 id="bestiary-title">怪物图鉴</h2></div><button id="bestiary-close" class="icon-button" type="button" aria-label="关闭怪物图鉴">×</button></div>
+          <div class="bestiary-list">
+            <article class="bestiary-entry bestiary-entry--jelly"><img src="art/jelly-enemy.png" alt=""><div><b>紫莓果冻</b><small>按顺序点亮标记，连续化解可让它破势。</small></div></article>
+            <article class="bestiary-entry bestiary-entry--angler"><img src="art/angler-enemy.png" alt=""><div><b>灯笼骗骗鱼</b><small>盯住诱灯，及时点中目标切断捕获。</small></div></article>
+            <article class="bestiary-entry bestiary-entry--hermit"><img src="art/hermit-enemy.png" alt=""><div><b>铠潮寄居蟹</b><small>击破两处弱点，破壳后才能造成完整伤害。</small></div></article>
+            <article class="bestiary-entry bestiary-entry--manta"><img src="art/manta-enemy.png" alt=""><div><b>星翼魔鬼鱼</b><small>避开潮汐扫线，在安全行点击反制。</small></div></article>
+            <article class="bestiary-entry bestiary-entry--puffer"><img src="art/puffer-enemy.png" alt=""><div><b>泡泡刺豚</b><small>蓄刺时停手，等它露出弱点再出击。</small></div></article>
+          </div>
         </div>
       </section>
 

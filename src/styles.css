@@ -1562,6 +1562,14 @@ input:focus-visible + i {
   --button-text: white;
 }
 
+#menu-bestiary {
+  --button-top: #ffe7ad;
+  --button-bottom: #f6a574;
+  --button-edge: #cf765e;
+  --button-glow: rgba(207, 118, 94, 0.24);
+  --button-text: #7a5260;
+}
+
 .result-face {
   display: grid;
   place-items: center;
@@ -1608,6 +1616,68 @@ input:focus-visible + i {
 
 .modal--settings {
   z-index: 70;
+}
+
+.modal--bestiary {
+  z-index: 72;
+}
+
+.bestiary-card {
+  max-height: min(90dvh, 44rem);
+  overflow: hidden;
+  text-align: left;
+}
+
+.bestiary-list {
+  display: grid;
+  gap: 0.5rem;
+  max-height: min(67dvh, 31rem);
+  overflow-y: auto;
+  padding: 0.15rem 0.18rem 0.2rem 0.05rem;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(82, 103, 168, 0.35) transparent;
+}
+
+.bestiary-entry {
+  display: grid;
+  grid-template-columns: 3.4rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.7rem;
+  min-height: 4.55rem;
+  padding: 0.35rem 0.58rem 0.35rem 0.38rem;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  border-radius: 1.1rem 0.8rem 1.1rem 0.9rem;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.65), 0 4px 10px rgba(72, 102, 112, 0.08);
+}
+
+.bestiary-entry--jelly { background: linear-gradient(135deg, #f1e5ff, #d5c1f4); }
+.bestiary-entry--angler { background: linear-gradient(135deg, #ffe7ef, #f8b7c6); }
+.bestiary-entry--hermit { background: linear-gradient(135deg, #fff0d8, #ffc495); }
+.bestiary-entry--manta { background: linear-gradient(135deg, #e3ecff, #b6cdf2); }
+.bestiary-entry--puffer { background: linear-gradient(135deg, #fff0c7, #ffd67b); }
+
+.bestiary-entry img {
+  width: 3.4rem;
+  height: 3.4rem;
+  object-fit: contain;
+  filter: drop-shadow(0 0.25rem 0.25rem rgba(82, 103, 168, 0.18));
+}
+
+.bestiary-entry div {
+  display: grid;
+  gap: 0.16rem;
+}
+
+.bestiary-entry b {
+  color: var(--blueberry);
+  font-size: 0.82rem;
+}
+
+.bestiary-entry small {
+  color: #5d7187;
+  font-size: 0.65rem;
+  font-weight: 700;
+  line-height: 1.35;
 }
 
 .settings-card {
@@ -1875,12 +1945,20 @@ input:focus-visible + i {
   .game-logo { scale: 0.88; }
   .mode-list { gap: 0.42rem; }
   .mode-card { min-height: 4.25rem; padding-block: 0.5rem; }
-  .menu-actions { gap: 1.05rem; margin-top: 2rem; }
+  .menu-actions { gap: 0.75rem; margin-top: 1.55rem; }
+  .menu-actions button { min-height: 2.55rem; padding-block: 0.5rem; }
   .menu-encounter { height: 10.6rem; }
   .menu-featured-enemy { right: -0.6rem; width: 9.5rem; }
   .menu-bubble--leader { --bubble-size: 4.7rem; --eye-gap: 1.45rem; }
   .menu-bubble--wing { --bubble-size: 3.2rem; --eye-gap: 0.95rem; bottom: 5.25rem; left: 3.8rem; }
   .menu-bubble--scout { --bubble-size: 2.3rem; --eye-gap: 0.66rem; bottom: 7.8rem; }
+  .bestiary-card { padding: 1rem; }
+  .bestiary-card .modal-heading { margin-bottom: 0.4rem; }
+  .bestiary-list { gap: 0.32rem; }
+  .bestiary-entry { grid-template-columns: 2.75rem minmax(0, 1fr); min-height: 3.85rem; padding-block: 0.2rem; }
+  .bestiary-entry img { width: 2.75rem; height: 2.75rem; }
+  .bestiary-entry b { font-size: 0.76rem; }
+  .bestiary-entry small { font-size: 0.59rem; }
   .loading-progress-wrap { width: min(calc(100% - 2.4rem), 22rem); }
 }
 
