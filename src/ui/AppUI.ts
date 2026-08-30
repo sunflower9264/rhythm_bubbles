@@ -506,7 +506,7 @@ export class AppUI {
       <section id="gameover-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="gameover-title">
         <div class="modal-card modal-card--result">
           <div class="result-face" aria-hidden="true"><img src="art/ui/result-defeat.png" alt=""></div>
-          <span class="modal-kicker">节拍断开了</span><h2 id="gameover-title">挑战失败</h2>
+          <h2 id="gameover-title">挑战失败</h2>
           <div class="result-grid"><div><small>得分</small><b id="gameover-score">0</b></div><div><small>到达</small><b>第 <span id="gameover-level">1</span> 战</b></div><div><small>最佳</small><b id="gameover-best">0</b></div></div>
           <button id="gameover-restart" class="primary-button" type="button">重新挑战</button>
           <button id="gameover-home" class="text-button" type="button">返回主页</button>
@@ -525,7 +525,7 @@ export class AppUI {
       <section id="victory-modal" class="modal modal--victory" role="dialog" aria-modal="true" aria-labelledby="victory-title">
         <div class="modal-card modal-card--result victory-card">
           <div class="victory-crown" aria-hidden="true"><img src="art/ui/result-victory.png" alt=""></div>
-          <span class="modal-kicker">五战全胜</span><h2 id="victory-title">花园重归节拍</h2><p>星尘巨王也被你的泡泡弹走啦！</p>
+          <span class="modal-kicker">五战全胜</span><h2 id="victory-title">挑战成功</h2><p>星尘巨王也被你的泡泡弹走啦！</p>
           <div class="result-grid"><div><small>总得分</small><b id="victory-score">0</b></div><div><small>战斗</small><b>5/5</b></div><div><small>剩余生命</small><b id="victory-health">0</b></div></div>
           <button id="victory-restart" class="primary-button" type="button">再闯一轮</button>
           <button id="victory-home" class="text-button" type="button">返回主页</button>
