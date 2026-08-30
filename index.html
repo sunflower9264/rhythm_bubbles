@@ -11,13 +11,25 @@
     <link rel="icon" type="image/png" sizes="192x192" href="art/icon-192.png">
     <link rel="apple-touch-icon" href="art/icon-192.png">
     <link rel="manifest" href="manifest.webmanifest">
+    <link rel="preload" as="image" href="art/loading-battle-key-art.png" fetchpriority="high">
+    <link rel="preload" as="image" href="art/game-title.png">
     <title>泡泡侠大战海洋怪</title>
   </head>
   <body>
     <main id="app">
       <div id="game-shell">
         <div id="game-container" aria-hidden="true"></div>
-        <div id="ui-layer"></div>
+        <div id="ui-layer">
+          <section id="loading-screen" class="loading-screen is-visible" aria-label="正在加载游戏资源" aria-live="polite">
+            <img class="loading-game-title" src="art/game-title.png" alt="泡泡侠大战海洋怪">
+            <div class="loading-progress-wrap" role="progressbar" aria-label="游戏资源加载进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+              <div class="loading-progress-bubbles" aria-hidden="true">
+                <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+              </div>
+              <strong class="loading-progress-value">0%</strong>
+            </div>
+          </section>
+        </div>
       </div>
     </main>
     <noscript>请启用 JavaScript 后游玩泡泡侠大战海洋怪。</noscript>
