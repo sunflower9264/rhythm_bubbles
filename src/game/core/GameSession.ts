@@ -216,7 +216,7 @@ export class GameSession {
       return this.finishBubbleTap('counter-miss', index);
     }
     if (!bypassMechanic && this.enemyMechanicState === 'active' && mechanic === 'capture' && index === intentIndex) {
-      this.performCounterHit();
+      this.performCounterHit(bubble);
       this.resetEnemyMechanic();
       return this.finishBubbleTap('enemy-countered', index);
     }
@@ -226,7 +226,7 @@ export class GameSession {
       [this.enemyIntentTargets[this.enemyIntentCursor], this.enemyIntentTargets[selectedPosition]] = [
         this.enemyIntentTargets[selectedPosition], this.enemyIntentTargets[this.enemyIntentCursor],
       ];
-      this.performCounterHit();
+      this.performCounterHit(bubble);
       this.enemyIntentCursor += 1;
       this.enemyPoise = Math.max(0, this.enemyIntentTargets.length - this.enemyIntentCursor);
       if (this.enemyIntentCursor < this.enemyIntentTargets.length) return this.finishBubbleTap('enemy-countered', index);
@@ -241,7 +241,7 @@ export class GameSession {
       return this.finishBubbleTap('enemy-break', index);
     }
     if (!bypassMechanic && this.enemyMechanicState === 'active' && mechanic === 'sequence' && index === intentIndex) {
-      this.performCounterHit();
+      this.performCounterHit(bubble);
       this.enemyIntentCursor += 1;
       if (this.enemyIntentCursor < this.enemyIntentTargets.length) return this.finishBubbleTap('enemy-countered', index);
 
@@ -641,6 +641,12 @@ export class GameSession {
     abilityEffect?: SessionUpdate['abilityEffect'],
     abilityStage?: SessionUpdate['abilityStage'],
   ): SessionUpdate {
+    if (this.phase === 'playing' && this.getRemainingTargets() === 0) {
+      this.beginTransition(this.enemyHp === 0
+        ? this.battle === ENEMY_ARCHETYPES.length ? 'victory' : 'reward'
+        : 'next-board');
+      return this.update(this.enemyHp === 0 ? 'encounter-win' : 'board-clear', index, abilityEffect, abilityStage);
+    }
     if (this.phase === 'playing' && this.getRemainingTargets() > 0 && this.boardTapCount >= this.getBoardTapLimit()) {
       this.beginTransition('next-board');
     }
@@ -676,7 +682,8 @@ export class GameSession {
     this.enemyMechanicElapsedMs = 0;
   }
 
-  private performCounterHit(): void {
+  private performCounterHit(bubble: BubbleState): void {
+    if (bubble.isTarget) bubble.cleared = true;
     this.score += 10;
     this.combo += 1;
     this.comboElapsedMs = 0;

@@ -207,6 +207,24 @@ test('铠潮寄居蟹需击破两个任意顺序弱点，护壳期减伤且破�
   assert.equal(update.snapshot.lastDamage, 18);
 });
 
+test('反制标记覆盖真实目标时一次点击同时清除目标泡泡', () => {
+  for (const enemyId of ['jelly', 'hermit'] as EnemyId[]) {
+    const { session, update: initial } = sessionStartingWithOverlappingIntent(enemyId);
+    let update = initial;
+    let targetIndex = update.snapshot.enemyIntentTargets[update.snapshot.enemyIntentCursor];
+
+    while (!update.snapshot.bubbles[targetIndex]?.isTarget) {
+      update = session.select(targetIndex);
+      targetIndex = update.snapshot.enemyIntentTargets[update.snapshot.enemyIntentCursor];
+    }
+
+    assert.equal(update.snapshot.bubbles[targetIndex].cleared, false, `${enemyId} precondition`);
+    update = session.select(targetIndex);
+    assert.equal(update.snapshot.bubbles[targetIndex].cleared, true, `${enemyId} should consume the target once`);
+    assert.equal(update.snapshot.visibleTargetIndices.includes(targetIndex), false, `${enemyId} should not restore the target`);
+  }
+});
+
 test('星翼魔鬼鱼危险行会反伤，安全行正确泡泡可打断扫线', () => {
   const risky = sessionStartingWith('manta');
   let update = reachFirstIntent(risky.session, risky.update);
@@ -564,6 +582,18 @@ function sessionStartingWith(enemyId: EnemyId, seedOffset = 0): { session: GameS
     if (update.snapshot.enemyId === enemyId) return { session, update };
   }
   throw new Error(`Unable to find seed for ${enemyId}`);
+}
+
+function sessionStartingWithOverlappingIntent(enemyId: EnemyId): { session: GameSession; update: SessionUpdate } {
+  for (let seed = 1; seed <= 8000; seed += 1) {
+    const session = new GameSession(createSeededRandom(Math.imul(seed, 0x9e3779b1)));
+    const update = session.start();
+    if (update.snapshot.enemyId !== enemyId) continue;
+    if (update.snapshot.enemyIntentTargets.some((index) => update.snapshot.bubbles[index]?.isTarget)) {
+      return { session, update };
+    }
+  }
+  throw new Error(`Unable to find overlapping intent target for ${enemyId}`);
 }
 
 function reachFirstIntent(session: GameSession, initial?: SessionUpdate): SessionUpdate {
