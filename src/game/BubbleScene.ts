@@ -27,10 +27,7 @@ export class BubbleScene extends Phaser.Scene {
   private intentLinks!: Phaser.GameObjects.Graphics;
   private shieldAura!: Phaser.GameObjects.Graphics;
   private enemy!: Phaser.GameObjects.Image;
-  private ultimateBackdrop!: Phaser.GameObjects.Image;
-  private ultimateBubbleEmitter!: Phaser.GameObjects.Particles.ParticleEmitter;
-  private ultimateSparkEmitter!: Phaser.GameObjects.Particles.ParticleEmitter;
-  private ultimateBackdropTween?: Phaser.Tweens.Tween;
+  private ultimateFxObjects = new Set<Phaser.GameObjects.GameObject>();
   private ultimateScreenVisual = false;
   private ultimateVisualStage: 0 | 1 | 2 | 3 = 0;
   private enemyBreathing?: Phaser.Tweens.Tween;
@@ -78,7 +75,9 @@ export class BubbleScene extends Phaser.Scene {
     this.load.image('hermit-enemy', 'art/hermit-enemy.png');
     this.load.image('manta-enemy', 'art/manta-enemy.png');
     this.load.image('puffer-enemy', 'art/puffer-enemy.png');
-    this.load.image('skill-tsunami-screen', 'art/ui/skill-tsunami-screen.png');
+    this.load.image('skill-tide-ripple', 'art/ui/skill-tide-ripple.png');
+    this.load.image('skill-control-wave', 'art/ui/skill-control-wave.png');
+    this.load.image('skill-shield-bubbles', 'art/ui/skill-shield-bubbles.png');
     this.load.audio('bgm', 'audio/bubble-garden-groove-v2.wav');
     this.load.audio('tap', 'audio/tap.wav');
     this.load.audio('correct-pop-1', 'audio/correct-pop-1.wav');
@@ -102,12 +101,6 @@ export class BubbleScene extends Phaser.Scene {
 
     this.createAmbientBubbles();
     this.createDropletTexture();
-    this.createUltimateParticleTextures();
-    this.ultimateBackdrop = this.add.image(WIDTH / 2, HEIGHT / 2, 'skill-tsunami-screen')
-      .setDisplaySize(WIDTH, HEIGHT)
-      .setDepth(6)
-      .setAlpha(0)
-      .setVisible(false);
     this.enemy = this.add.image(WIDTH / 2, this.enemyCenterY, 'jelly-enemy').setDisplaySize(288, 288).setDepth(7).setVisible(false);
     this.dropletEmitter = this.add.particles(0, 0, 'bubble-droplet', {
       emitting: false,
@@ -120,32 +113,6 @@ export class BubbleScene extends Phaser.Scene {
       rotate: { min: -160, max: 160 },
       tint: [0xff8e8a, 0xffd66b, 0x63d6c5, 0x8fa7f2],
     }).setDepth(32);
-    this.ultimateBubbleEmitter = this.add.particles(0, 0, 'ultimate-bubble', {
-      emitting: false,
-      x: { min: 20, max: WIDTH - 20 },
-      y: { min: HEIGHT - 120, max: HEIGHT + 40 },
-      lifespan: { min: 1200, max: 2100 },
-      frequency: 85,
-      quantity: 1,
-      maxParticles: 58,
-      speedX: { min: -42, max: 42 },
-      speedY: { min: -330, max: -190 },
-      alpha: { start: 0.9, end: 0 },
-      scale: { start: 0.78, end: 1.35 },
-      rotate: { min: -40, max: 40 },
-      tint: [0xdffff8, 0xa8efe5, 0xffc5c1, 0xe2d3ff, 0xffefaa],
-    }).setDepth(30);
-    this.ultimateSparkEmitter = this.add.particles(0, 0, 'ultimate-spark', {
-      emitting: false,
-      lifespan: { min: 380, max: 760 },
-      speed: { min: 110, max: 310 },
-      angle: { min: 0, max: 360 },
-      gravityY: 80,
-      alpha: { start: 1, end: 0 },
-      scale: { start: 1, end: 0.12 },
-      rotate: { min: -220, max: 220 },
-      tint: [0xff8e8a, 0xffd66b, 0x63d6c5, 0x9a7bd1, 0xffffff],
-    }).setDepth(31);
 
     this.boardGlow = this.add.graphics().setDepth(4);
     this.board = this.add.image(WIDTH / 2, BOARD_CENTER_Y, 'board-frame').setDepth(5);
@@ -199,6 +166,7 @@ export class BubbleScene extends Phaser.Scene {
         alpha: Number(this.enemy.alpha.toFixed(2)),
         x: Math.round(this.enemy.x),
         y: Math.round(this.enemy.y),
+        restY: Math.round(this.enemyCenterY),
         displayWidth: Math.round(this.enemy.displayWidth),
         displayHeight: Math.round(this.enemy.displayHeight),
         scaleX: Number(this.enemy.scaleX.toFixed(3)),
@@ -206,11 +174,15 @@ export class BubbleScene extends Phaser.Scene {
         breathing: this.enemyBreathing?.isPlaying() ?? false,
       } : null,
       ultimate: {
-        screenFxVisible: Boolean(this.ultimateBackdrop?.visible),
-        screenFxAlpha: Number((this.ultimateBackdrop?.alpha ?? 0).toFixed(2)),
-        screenFxWidth: Math.round(this.ultimateBackdrop?.displayWidth ?? 0),
-        screenFxHeight: Math.round(this.ultimateBackdrop?.displayHeight ?? 0),
-        activeBubbleParticles: this.ultimateBubbleEmitter?.getAliveParticleCount() ?? 0,
+        screenFxVisible: false,
+        screenFxAlpha: 0,
+        screenFxWidth: 0,
+        screenFxHeight: 0,
+        activeBubbleParticles: this.countUltimateFx('skill-shield-bubbles'),
+        rippleVisible: this.countUltimateFx('skill-tide-ripple') > 0,
+        waveVisible: this.countUltimateFx('skill-control-wave') > 0,
+        ripple: this.describeUltimateFx('skill-tide-ripple'),
+        wave: this.describeUltimateFx('skill-control-wave'),
         visualStage: this.ultimateVisualStage,
       },
       performance: {
@@ -476,7 +448,6 @@ export class BubbleScene extends Phaser.Scene {
     if (!update.abilityEffect) return;
     if (update.abilityEffect === 'ultimate-start') {
       this.startUltimateScreenFx(true);
-      this.createUltimatePulse(0, 1);
       return;
     }
     if (update.abilityEffect === 'ultimate-hit') {
@@ -492,11 +463,9 @@ export class BubbleScene extends Phaser.Scene {
 
   private animateUltimateHit(stage: 1 | 2 | 3): void {
     if (!this.enemy.visible) return;
-    const intensity = stage === 3 ? 1.65 : stage === 2 ? 1.25 : 1;
     this.ultimateVisualStage = stage;
-    this.createUltimatePulse(stage, intensity);
-    this.dropletEmitter.explode(stage === 3 ? 46 : stage === 2 ? 32 : 22, this.enemy.x, this.enemy.y);
-    this.emitUltimateParticles(stage);
+    this.createUltimatePulse(stage);
+    this.emitUltimateUpgradeEffects(stage);
     if (!this.preferences.reducedMotion) {
       if (this.latestSnapshot.enemyHp <= 0) return;
       this.stopEnemyMotion();
@@ -533,61 +502,53 @@ export class BubbleScene extends Phaser.Scene {
     }
   }
 
-  private createUltimatePulse(stage: number, intensity: number): void {
-    const centerY = HEIGHT * (stage === 0 ? 0.72 : 0.52);
-    const color = stage === 3 ? 0xffb07e : stage === 2 ? 0x9a7bd1 : 0x8ef1df;
-    const ring = this.add.ellipse(WIDTH / 2, centerY, 170, 116)
-      .setStrokeStyle(stage === 3 ? 18 : 12, color, 0.88)
+  private createUltimatePulse(stage: 1 | 2 | 3): void {
+    const blastLevel = this.latestSnapshot.ultimateUpgradeLevels.blast;
+    const ripple = this.add.image(this.enemy.x, this.enemy.y, 'skill-tide-ripple')
       .setDepth(29)
-      .setScale(stage === 0 ? 0.42 : 0.58);
-    const secondRing = this.add.ellipse(WIDTH / 2, centerY + 28, 230, 142)
-      .setStrokeStyle(stage === 2 ? 13 : 8, stage === 2 ? 0xcbb7ff : 0xdffff8, 0.62)
-      .setDepth(28)
-      .setScale(stage === 0 ? 0.32 : 0.5);
-    this.transientEffects.add(ring);
-    this.transientEffects.add(secondRing);
-    this.destroyAfterTween(ring, {
-      scaleX: 5.1 + intensity * 0.35,
-      scaleY: 6.6 + intensity * 0.4,
+      .setAlpha(stage === 3 ? 1 : 0.92)
+      .setDisplaySize(640, 640)
+      .setScale(this.preferences.reducedMotion ? 0.82 : 0.3 + stage * 0.035);
+    this.trackUltimateFx(ripple);
+    this.destroyAfterTween(ripple, {
+      scale: this.preferences.reducedMotion ? 1.05 : 1.04 + stage * 0.11 + blastLevel * 0.035,
       alpha: 0,
-      duration: this.preferences.reducedMotion ? 160 : 420 + intensity * 75,
+      duration: this.preferences.reducedMotion ? 220 : 620 + stage * 70,
       ease: 'Cubic.Out',
-    });
-    this.destroyAfterTween(secondRing, {
-      scaleX: 4.15 + intensity * 0.25,
-      scaleY: 5.4 + intensity * 0.3,
-      alpha: 0,
-      duration: this.preferences.reducedMotion ? 150 : 500 + intensity * 70,
-      ease: 'Sine.Out',
     });
   }
 
-  private emitUltimateParticles(stage: 1 | 2 | 3): void {
-    if (this.preferences.reducedMotion) return;
-    const blastLevel = this.latestSnapshot.ultimateUpgradeLevels.blast;
+  private emitUltimateUpgradeEffects(stage: 1 | 2 | 3): void {
     const controlLevel = this.latestSnapshot.ultimateUpgradeLevels.control;
-    const burstRows = stage === 3 ? 5 : 3;
-    for (let row = 0; row < burstRows; row += 1) {
-      const x = 80 + ((row * 173 + stage * 97) % (WIDTH - 160));
-      const y = 250 + ((row * 211 + stage * 149) % (HEIGHT - 430));
-      this.ultimateBubbleEmitter.explode(stage === 3 ? 8 : 5, x, y);
-      this.ultimateSparkEmitter.explode(3 + stage * 2 + blastLevel * 2, x, y);
+    if (controlLevel === 0) return;
+    const wave = this.add.image(
+      WIDTH / 2,
+      this.preferences.reducedMotion ? this.enemyCenterY + 210 : HEIGHT + 330,
+      'skill-control-wave',
+    )
+      .setDisplaySize(WIDTH * 1.55 * (stage === 3 ? 1.06 : 1), 880 * (stage === 3 ? 1.06 : 1))
+      .setDepth(27)
+      .setAlpha(this.preferences.reducedMotion ? 0.7 : 0.94);
+    const impactScaleX = wave.scaleX * (stage === 3 ? 1.1 : 1.06);
+    const impactScaleY = wave.scaleY * (stage === 3 ? 1.1 : 1.06);
+    this.trackUltimateFx(wave);
+    if (this.preferences.reducedMotion) {
+      this.destroyAfterTween(wave, { alpha: 0, duration: 260, ease: 'Sine.In' });
+      return;
     }
-    for (let level = 0; level < controlLevel; level += 1) {
-      const current = this.add.ellipse(WIDTH / 2, HEIGHT * (0.36 + level * 0.16), 210, 84)
-        .setStrokeStyle(7, 0xbba3ff, 0.62)
-        .setDepth(29)
-        .setAngle(-12 + level * 16);
-      this.transientEffects.add(current);
-      this.destroyAfterTween(current, {
-        scaleX: 3.4,
-        scaleY: 2.8,
-        angle: current.angle + 42,
+    this.tweens.add({
+      targets: wave,
+      y: this.enemyCenterY + 95,
+      duration: 560 - controlLevel * 35,
+      ease: 'Cubic.Out',
+      onComplete: () => this.destroyAfterTween(wave, {
         alpha: 0,
-        duration: 620 + level * 90,
+        scaleX: impactScaleX,
+        scaleY: impactScaleY,
+        duration: 220,
         ease: 'Cubic.Out',
-      });
-    }
+      }),
+    });
   }
 
   private animateCorrectAt(index: number, large: boolean): void {
@@ -962,85 +923,49 @@ export class BubbleScene extends Phaser.Scene {
   private hideUltimateVisuals(): void {
     this.ultimateScreenVisual = false;
     this.ultimateVisualStage = 0;
-    this.ultimateBackdropTween?.stop();
-    this.ultimateBackdropTween = undefined;
-    this.ultimateBubbleEmitter?.stop();
-    this.ultimateBubbleEmitter?.killAll();
-    this.ultimateSparkEmitter?.killAll();
-    this.ultimateBackdrop?.setVisible(false).setAlpha(0);
+    this.clearUltimateFx();
   }
 
   private startUltimateScreenFx(withEntrance: boolean): void {
     this.ultimateScreenVisual = true;
     this.ultimateVisualStage = 0;
-    this.ultimateBackdropTween?.stop();
-    this.ultimateBackdropTween = undefined;
-    this.ultimateBackdrop
-      .setPosition(WIDTH / 2, HEIGHT / 2)
-      .setDisplaySize(WIDTH, HEIGHT)
-      .setAngle(0)
-      .setScale(withEntrance && !this.preferences.reducedMotion ? 1.08 : 1)
-      .setAlpha(this.preferences.reducedMotion ? 0.3 : withEntrance ? 0 : 0.38)
-      .setVisible(true);
-    if (!this.preferences.reducedMotion) {
-      this.ultimateBubbleEmitter.start();
-      for (let column = 0; column < 6; column += 1) {
-        const x = 55 + column * 122;
-        const y = HEIGHT - 70 - (column % 2) * 115;
-        this.ultimateBubbleEmitter.explode(5, x, y);
-        this.ultimateSparkEmitter.explode(4, x, y);
-      }
-    }
-    if (this.preferences.reducedMotion) return;
-    if (withEntrance) {
-      this.ultimateBackdropTween = this.tweens.add({
-        targets: this.ultimateBackdrop,
-        alpha: 0.44,
-        scaleX: 1,
-        scaleY: 1,
-        duration: 460,
-        ease: 'Cubic.Out',
-        onComplete: () => this.startUltimateScreenLoop(),
-      });
-      return;
-    }
-    this.startUltimateScreenLoop();
+    if (this.latestSnapshot.ultimateUpgradeLevels.shield > 0) this.emitShieldBubbles(withEntrance);
   }
 
-  private startUltimateScreenLoop(): void {
-    if (!this.ultimateBackdrop.visible || this.preferences.reducedMotion) return;
-    this.ultimateBackdropTween?.stop();
-    this.ultimateBackdropTween = this.tweens.add({
-      targets: this.ultimateBackdrop,
-      alpha: 0.32,
-      scaleX: 1.018,
-      scaleY: 1.018,
-      duration: 1150,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.InOut',
-    });
-  }
-
-  private stopUltimateScreenFx(immediate: boolean): void {
+  private stopUltimateScreenFx(_immediate: boolean): void {
     this.ultimateScreenVisual = false;
     this.ultimateVisualStage = 0;
-    this.ultimateBubbleEmitter.stop();
-    this.ultimateBackdropTween?.stop();
-    this.ultimateBackdropTween = undefined;
-    if (immediate || this.preferences.reducedMotion) {
-      this.ultimateBackdrop.setVisible(false).setAlpha(0);
-      return;
+    this.clearUltimateFx();
+  }
+
+  private emitShieldBubbles(withEntrance: boolean): void {
+    const count = this.preferences.reducedMotion ? 1 : 2;
+    for (let index = 0; index < count; index += 1) {
+      const bubbles = this.add.image(index === 0 ? 250 : 470, this.preferences.reducedMotion ? 720 : 1450 + index * 130, 'skill-shield-bubbles')
+        .setDisplaySize(480, 1218)
+        .setDepth(30)
+        .setFlipX(index === 1)
+        .setAlpha(this.preferences.reducedMotion ? 0.66 : 0);
+      this.trackUltimateFx(bubbles);
+      if (this.preferences.reducedMotion) {
+        this.destroyAfterTween(bubbles, { alpha: 0, duration: 280, delay: 120, ease: 'Sine.In' });
+        continue;
+      }
+      this.tweens.add({
+        targets: bubbles,
+        y: bubbles.y - 180,
+        alpha: 0.78,
+        duration: 190,
+        delay: withEntrance ? index * 110 : 0,
+        ease: 'Cubic.Out',
+        onComplete: () => this.destroyAfterTween(bubbles, {
+          y: -80 - index * 90,
+          alpha: 0,
+          duration: 1750 + index * 180,
+          ease: 'Sine.Out',
+        }),
+      });
     }
-    this.ultimateBackdropTween = this.tweens.add({
-      targets: this.ultimateBackdrop,
-      alpha: 0,
-      scaleX: 1.08,
-      scaleY: 1.08,
-      duration: 380,
-      ease: 'Cubic.In',
-      onComplete: () => this.ultimateBackdrop.setVisible(false),
-    });
   }
 
   private animateEnemyHit(damage: number, defeated: boolean, showDamageText = true): void {
@@ -1323,8 +1248,46 @@ export class BubbleScene extends Phaser.Scene {
 
   private destroyTransient(target: Phaser.GameObjects.GameObject): void {
     this.transientEffects.delete(target);
+    this.ultimateFxObjects.delete(target);
     if (target === this.combatText) this.combatText = undefined;
     target.destroy();
+  }
+
+  private trackUltimateFx(effect: Phaser.GameObjects.Image): void {
+    this.ultimateFxObjects.add(effect);
+    this.transientEffects.add(effect);
+  }
+
+  private countUltimateFx(textureKey: string): number {
+    return [...this.ultimateFxObjects].filter((effect) => (
+      effect.active
+      && effect instanceof Phaser.GameObjects.Image
+      && effect.texture.key === textureKey
+    )).length;
+  }
+
+  private describeUltimateFx(textureKey: string): { x: number; y: number; width: number; height: number } | null {
+    const effect = [...this.ultimateFxObjects].find((candidate) => (
+      candidate.active
+      && candidate instanceof Phaser.GameObjects.Image
+      && candidate.texture.key === textureKey
+    ));
+    if (!(effect instanceof Phaser.GameObjects.Image)) return null;
+    return {
+      x: Math.round(effect.x),
+      y: Math.round(effect.y),
+      width: Math.round(effect.displayWidth),
+      height: Math.round(effect.displayHeight),
+    };
+  }
+
+  private clearUltimateFx(): void {
+    for (const effect of this.ultimateFxObjects) {
+      this.tweens.killTweensOf(effect);
+      this.transientEffects.delete(effect);
+      effect.destroy();
+    }
+    this.ultimateFxObjects.clear();
   }
 
   private syncAudio(): void {
@@ -1397,6 +1360,7 @@ export class BubbleScene extends Phaser.Scene {
       effect.destroy();
     }
     this.transientEffects.clear();
+    this.ultimateFxObjects.clear();
     this.combatText = undefined;
   }
 
@@ -1433,49 +1397,4 @@ export class BubbleScene extends Phaser.Scene {
     texture.refresh();
   }
 
-  private createUltimateParticleTextures(): void {
-    if (!this.textures.exists('ultimate-bubble')) {
-      const texture = this.textures.createCanvas('ultimate-bubble', 40, 40);
-      if (texture) {
-        const context = texture.context;
-        const gradient = context.createRadialGradient(13, 10, 2, 20, 21, 18);
-        gradient.addColorStop(0, 'rgba(255,255,255,.96)');
-        gradient.addColorStop(0.22, 'rgba(223,255,248,.5)');
-        gradient.addColorStop(0.72, 'rgba(99,214,197,.18)');
-        gradient.addColorStop(1, 'rgba(115,88,184,.06)');
-        context.fillStyle = gradient;
-        context.beginPath();
-        context.arc(20, 20, 17, 0, Math.PI * 2);
-        context.fill();
-        context.strokeStyle = 'rgba(255,255,255,.92)';
-        context.lineWidth = 2.5;
-        context.stroke();
-        context.fillStyle = 'rgba(255,255,255,.9)';
-        context.beginPath();
-        context.ellipse(14, 12, 5, 3, -0.55, 0, Math.PI * 2);
-        context.fill();
-        texture.refresh();
-      }
-    }
-
-    if (!this.textures.exists('ultimate-spark')) {
-      const texture = this.textures.createCanvas('ultimate-spark', 36, 36);
-      if (texture) {
-        const context = texture.context;
-        context.fillStyle = '#ffffff';
-        context.beginPath();
-        context.moveTo(18, 1);
-        context.lineTo(22, 13);
-        context.lineTo(35, 18);
-        context.lineTo(22, 22);
-        context.lineTo(18, 35);
-        context.lineTo(14, 22);
-        context.lineTo(1, 18);
-        context.lineTo(14, 13);
-        context.closePath();
-        context.fill();
-        texture.refresh();
-      }
-    }
-  }
 }

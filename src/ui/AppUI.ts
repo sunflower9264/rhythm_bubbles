@@ -149,7 +149,7 @@ export class AppUI {
     this.style('#player-energy-fill', 'width', `${Math.max(0, Math.min(1, displayedEnergyRatio)) * 100}%`);
     const ultimateStateText = snapshot.ultimateActive
       ? snapshot.ultimateStage === 3 ? '终结潮' : `潮汐 ${snapshot.ultimateStage + 1}/3`
-      : snapshot.ultimateReady ? '释放' : `${Math.round(Math.max(0, Math.min(1, energyRatio)) * 100)}%`;
+      : `${Math.round(Math.max(0, Math.min(1, energyRatio)) * 100)}%`;
     this.text('#player-energy-value', ultimateStateText);
     const energyMeter = this.get('.player-meter--energy');
     energyMeter.classList.toggle('is-ready', snapshot.ultimateReady);
@@ -475,7 +475,7 @@ export class AppUI {
             <div class="player-meters">
               <div class="player-meter player-vital"><small>生命</small><i class="health-track health-track--player liquid-meter"><u id="player-health-fill" class="liquid-fill"></u></i><strong><span id="player-health-value">100</span><em>/<span id="player-max-health">100</span></em></strong></div>
               <div class="player-meter player-meter--shield"><small>护盾</small><i class="player-meter-track liquid-meter"><u id="player-shield-fill" class="liquid-fill"></u></i><strong id="player-shield-value">0</strong></div>
-              <div class="player-meter player-meter--energy" data-stage="0"><small><img src="art/ui/skill-ultimate.png" alt=""><span>海啸</span></small><i class="player-meter-track liquid-meter"><u id="player-energy-fill" class="liquid-fill"></u></i><strong id="player-energy-value">0%</strong></div>
+              <div class="player-meter player-meter--energy" data-stage="0"><small>能量</small><i class="player-meter-track liquid-meter"><u id="player-energy-fill" class="liquid-fill"></u></i><strong id="player-energy-value">0%</strong></div>
             </div>
           </div>
           <div id="enemy-status" class="enemy-status">

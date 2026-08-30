@@ -894,18 +894,7 @@ input:focus-visible + i {
 }
 
 .player-meter--energy small {
-  display: flex;
-  align-items: center;
-  gap: 0.13rem;
-  letter-spacing: 0;
   white-space: nowrap;
-}
-
-.player-meter--energy small img {
-  width: 0.82rem;
-  height: 0.82rem;
-  object-fit: contain;
-  filter: drop-shadow(0 0 0.18rem rgba(99, 214, 197, 0.55));
 }
 
 .player-meter--energy .liquid-fill {
@@ -923,10 +912,6 @@ input:focus-visible + i {
   color: #7451b4;
   font-size: 0.58rem;
   text-shadow: 0 0 0.35rem rgba(255, 255, 255, 0.9);
-}
-
-.player-meter--energy.is-ready small img {
-  animation: ultimate-icon-ready 900ms ease-in-out infinite alternate;
 }
 
 .player-meter--energy.is-active .player-meter-track {
@@ -961,10 +946,6 @@ input:focus-visible + i {
 
 @keyframes ultimate-meter-ready {
   to { filter: brightness(1.12) saturate(1.08); }
-}
-
-@keyframes ultimate-icon-ready {
-  to { transform: scale(1.16) rotate(8deg); filter: drop-shadow(0 0 0.32rem rgba(255, 214, 107, 0.9)); }
 }
 
 @keyframes ultimate-skill-active {
@@ -1786,7 +1767,6 @@ input:focus-visible + i {
 .reduce-motion .liquid-fill::before,
 .reduce-motion .liquid-fill::after,
 .reduce-motion .player-meter--energy.is-ready .player-meter-track,
-.reduce-motion .player-meter--energy.is-ready small img,
 .reduce-motion .player-meter--energy.is-active .liquid-fill,
 .reduce-motion .volume-row input {
   animation: none !important;
@@ -1845,7 +1825,6 @@ input:focus-visible + i {
   .liquid-fill::before,
   .liquid-fill::after,
   .player-meter--energy.is-ready .player-meter-track,
-  .player-meter--energy.is-ready small img,
   .player-meter--energy.is-active .liquid-fill,
   .volume-row input {
     animation: none !important;
