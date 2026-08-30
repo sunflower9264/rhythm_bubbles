@@ -1,10 +1,12 @@
-const CACHE_NAME = 'rhythm-bubbles-v64';
+const CACHE_NAME = 'rhythm-bubbles-v65';
 const CORE_ASSETS = [
   './',
   './manifest.webmanifest',
   './art/bubble-garden.webp',
   './art/loading-battle-key-art.png',
   './art/game-title.png',
+  './art/bubble-normal.png',
+  './art/bubble-target.png',
   './art/ui/button-teal.png',
   './art/ui/button-coral.png',
   './art/ui/button-violet.png',

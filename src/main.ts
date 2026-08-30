@@ -34,6 +34,8 @@ const GAME_RESOURCES = [
   'art/ui/result-defeat.png',
   'art/ui/result-victory.png',
   'art/bubble-garden.webp',
+  'art/bubble-normal.png',
+  'art/bubble-target.png',
   'art/jelly-enemy.png',
   'art/angler-enemy.png',
   'art/hermit-enemy.png',

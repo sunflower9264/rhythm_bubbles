@@ -458,9 +458,9 @@ export class AppUI {
         </div>
         <div id="menu-encounter" class="menu-encounter" data-enemy="jelly" aria-hidden="true">
           <div class="menu-bubble-squad">
-            <i class="menu-bubble menu-bubble--leader"><span></span></i>
-            <i class="menu-bubble menu-bubble--wing"><span></span></i>
-            <i class="menu-bubble menu-bubble--scout"><span></span></i>
+            <img class="menu-bubble menu-bubble--leader" src="art/bubble-normal.png" alt="">
+            <img class="menu-bubble menu-bubble--wing" src="art/bubble-normal.png" alt="">
+            <img class="menu-bubble menu-bubble--scout" src="art/bubble-normal.png" alt="">
           </div>
           <div class="menu-current"><i></i></div>
           <img id="menu-featured-enemy" class="menu-featured-enemy" src="art/jelly-enemy.png" alt="">

@@ -378,53 +378,22 @@ input:focus-visible + i {
 
 .menu-bubble {
   --bubble-size: 4rem;
-  --eye-gap: 1rem;
   position: absolute;
+  display: block;
   width: var(--bubble-size);
-  aspect-ratio: 1;
-  border: 0.18rem solid rgba(255, 255, 255, 0.94);
-  border-radius: 50%;
-  background:
-    radial-gradient(circle at 31% 24%, rgba(255, 255, 255, 0.96) 0 8%, transparent 9%),
-    radial-gradient(circle at 67% 73%, rgba(64, 188, 191, 0.2), transparent 38%),
-    linear-gradient(145deg, rgba(186, 255, 242, 0.95), rgba(73, 207, 202, 0.94) 56%, rgba(74, 170, 198, 0.9));
-  box-shadow: inset 0.42rem 0.5rem 0.75rem rgba(255, 255, 255, 0.32), 0 0.6rem 1.1rem rgba(47, 159, 150, 0.2);
+  height: auto;
+  filter: drop-shadow(0 0.55rem 0.52rem rgba(47, 159, 150, 0.2));
   animation: menu-bubble-hover 2.8s ease-in-out infinite alternate;
-}
-
-.menu-bubble::after {
-  content: "";
-  position: absolute;
-  top: 58%;
-  left: 44%;
-  width: 14%;
-  height: 8%;
-  border-bottom: 0.12rem solid #36506f;
-  border-radius: 0 0 50% 50%;
-}
-
-.menu-bubble > span::before {
-  content: "";
-  position: absolute;
-  top: 42%;
-  left: 30%;
-  width: 10%;
-  aspect-ratio: 0.78;
-  border-radius: 50%;
-  background: #36506f;
-  box-shadow: var(--eye-gap) 0 #36506f;
 }
 
 .menu-bubble--leader {
   --bubble-size: clamp(5.5rem, 25vw, 6.8rem);
-  --eye-gap: 1.75rem;
   bottom: 0.4rem;
   left: -0.45rem;
 }
 
 .menu-bubble--wing {
   --bubble-size: clamp(3.8rem, 17vw, 4.7rem);
-  --eye-gap: 1.15rem;
   bottom: 6.7rem;
   left: 4.5rem;
   animation-delay: -1.2s;
@@ -432,7 +401,6 @@ input:focus-visible + i {
 
 .menu-bubble--scout {
   --bubble-size: clamp(2.75rem, 12vw, 3.35rem);
-  --eye-gap: 0.82rem;
   bottom: 10.7rem;
   left: 0.9rem;
   animation-delay: -2s;
@@ -1840,9 +1808,9 @@ input:focus-visible + i {
   #start-game { min-height: 3.5rem; }
   .menu-encounter { height: 10.6rem; }
   .menu-featured-enemy { right: -0.6rem; width: 9.5rem; }
-  .menu-bubble--leader { --bubble-size: 4.7rem; --eye-gap: 1.45rem; }
-  .menu-bubble--wing { --bubble-size: 3.2rem; --eye-gap: 0.95rem; bottom: 5.25rem; left: 3.8rem; }
-  .menu-bubble--scout { --bubble-size: 2.3rem; --eye-gap: 0.66rem; bottom: 7.8rem; }
+  .menu-bubble--leader { --bubble-size: 4.7rem; }
+  .menu-bubble--wing { --bubble-size: 3.2rem; bottom: 5.25rem; left: 3.8rem; }
+  .menu-bubble--scout { --bubble-size: 2.3rem; bottom: 7.8rem; }
   .bestiary-card { padding: 1rem; }
   .bestiary-card .modal-heading { margin-bottom: 0.4rem; }
   .bestiary-list { gap: 0.32rem; }

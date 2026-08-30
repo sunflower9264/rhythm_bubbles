@@ -71,6 +71,8 @@ export class BubbleScene extends Phaser.Scene {
   preload(): void {
     this.load.image('garden-bg', 'art/bubble-garden.webp');
     this.load.image('board-frame', 'art/ui/board-frame.png');
+    this.load.image('bubble-normal', 'art/bubble-normal.png');
+    this.load.image('bubble-target', 'art/bubble-target.png');
     this.load.image('jelly-enemy', 'art/jelly-enemy.png');
     this.load.image('angler-enemy', 'art/angler-enemy.png');
     this.load.image('hermit-enemy', 'art/hermit-enemy.png');
@@ -99,8 +101,6 @@ export class BubbleScene extends Phaser.Scene {
     this.background.setDisplaySize(WIDTH, HEIGHT);
 
     this.createAmbientBubbles();
-    this.createBubbleTexture('bubble-normal', ['#d8fff3', '#79dcca', '#45b9ac']);
-    this.createBubbleTexture('bubble-target', ['#fff6a8', '#ffb96f', '#ff7f82']);
     this.createDropletTexture();
     this.createUltimateParticleTextures();
     this.ultimateBackdrop = this.add.image(WIDTH / 2, HEIGHT / 2, 'skill-tsunami-screen')
@@ -1411,54 +1411,6 @@ export class BubbleScene extends Phaser.Scene {
       const bubble = this.add.circle(x, y, radius, color, 0.18).setStrokeStyle(2, 0xffffff, 0.45).setDepth(2);
       this.tweens.add({ targets: bubble, y: y - 18, x: x + 7, duration: 2600 + radius * 35, yoyo: true, repeat: -1, ease: 'Sine.InOut' });
     }
-  }
-
-  private createBubbleTexture(key: string, colors: [string, string, string]): void {
-    if (this.textures.exists(key)) return;
-    const texture = this.textures.createCanvas(key, 180, 180);
-    if (!texture) return;
-    const context = texture.context;
-    const gradient = context.createRadialGradient(62, 48, 8, 90, 92, 82);
-    gradient.addColorStop(0, colors[0]);
-    gradient.addColorStop(0.56, colors[1]);
-    gradient.addColorStop(1, colors[2]);
-    context.fillStyle = 'rgba(65, 92, 120, .13)';
-    context.beginPath();
-    context.ellipse(93, 158, 61, 13, 0, 0, Math.PI * 2);
-    context.fill();
-    context.fillStyle = gradient;
-    context.beginPath();
-    context.arc(90, 88, 76, 0, Math.PI * 2);
-    context.fill();
-    context.strokeStyle = 'rgba(255,255,255,.78)';
-    context.lineWidth = 6;
-    context.stroke();
-    context.fillStyle = 'rgba(255,255,255,.82)';
-    context.beginPath();
-    context.ellipse(60, 48, 25, 15, -0.5, 0, Math.PI * 2);
-    context.fill();
-    context.fillStyle = '#274f78';
-    context.beginPath();
-    context.ellipse(67, 97, 8, 12, 0, 0, Math.PI * 2);
-    context.ellipse(113, 97, 8, 12, 0, 0, Math.PI * 2);
-    context.fill();
-    context.fillStyle = 'white';
-    context.beginPath();
-    context.arc(64, 93, 3, 0, Math.PI * 2);
-    context.arc(110, 93, 3, 0, Math.PI * 2);
-    context.fill();
-    context.strokeStyle = '#274f78';
-    context.lineWidth = 4;
-    context.lineCap = 'round';
-    context.beginPath();
-    context.arc(90, 109, 14, 0.18, Math.PI - 0.18);
-    context.stroke();
-    context.fillStyle = 'rgba(255,116,129,.45)';
-    context.beginPath();
-    context.ellipse(47, 116, 12, 6, 0, 0, Math.PI * 2);
-    context.ellipse(133, 116, 12, 6, 0, 0, Math.PI * 2);
-    context.fill();
-    texture.refresh();
   }
 
   private createDropletTexture(): void {
