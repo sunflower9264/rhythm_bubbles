@@ -27,9 +27,6 @@ export class BubbleScene extends Phaser.Scene {
   private intentLinks!: Phaser.GameObjects.Graphics;
   private shieldAura!: Phaser.GameObjects.Graphics;
   private enemy!: Phaser.GameObjects.Image;
-  private ultimateFxObjects = new Set<Phaser.GameObjects.GameObject>();
-  private ultimateScreenVisual = false;
-  private ultimateVisualStage: 0 | 1 | 2 | 3 = 0;
   private enemyBreathing?: Phaser.Tweens.Tween;
   private enemyMotionEpoch = 0;
   private dropletEmitter!: Phaser.GameObjects.Particles.ParticleEmitter;
@@ -75,9 +72,6 @@ export class BubbleScene extends Phaser.Scene {
     this.load.image('hermit-enemy', 'art/hermit-enemy.png');
     this.load.image('manta-enemy', 'art/manta-enemy.png');
     this.load.image('puffer-enemy', 'art/puffer-enemy.png');
-    this.load.image('skill-tide-ripple', 'art/ui/skill-tide-ripple.png');
-    this.load.image('skill-control-wave', 'art/ui/skill-control-wave.png');
-    this.load.image('skill-shield-bubbles', 'art/ui/skill-shield-bubbles.png');
     this.load.audio('bgm', 'audio/bubble-garden-groove-v2.wav');
     this.load.audio('tap', 'audio/tap.wav');
     this.load.audio('correct-pop-1', 'audio/correct-pop-1.wav');
@@ -173,18 +167,6 @@ export class BubbleScene extends Phaser.Scene {
         scaleY: Number(this.enemy.scaleY.toFixed(3)),
         breathing: this.enemyBreathing?.isPlaying() ?? false,
       } : null,
-      ultimate: {
-        screenFxVisible: false,
-        screenFxAlpha: 0,
-        screenFxWidth: 0,
-        screenFxHeight: 0,
-        activeBubbleParticles: this.countUltimateFx('skill-shield-bubbles'),
-        rippleVisible: this.countUltimateFx('skill-tide-ripple') > 0,
-        waveVisible: this.countUltimateFx('skill-control-wave') > 0,
-        ripple: this.describeUltimateFx('skill-tide-ripple'),
-        wave: this.describeUltimateFx('skill-control-wave'),
-        visualStage: this.ultimateVisualStage,
-      },
       performance: {
         fpsTarget: this.game.loop.targetFps,
         fpsLimit: this.game.loop.fpsLimit,
@@ -229,7 +211,6 @@ export class BubbleScene extends Phaser.Scene {
       this.board.setVisible(false);
       this.boardGlow.setVisible(false);
       this.enemy.setVisible(false);
-      this.hideUltimateVisuals();
       this.intentLinks.clear();
       this.shieldAura.clear();
       this.renderedIntentLinkCount = 0;
@@ -246,7 +227,6 @@ export class BubbleScene extends Phaser.Scene {
     this.board.setVisible(true);
     this.boardGlow.setVisible(true);
     this.syncEnemy(snapshot, update);
-    this.syncUltimateVisual(snapshot, update.abilityEffect);
     this.drawShield(snapshot);
     if (nextLevelKey !== this.currentLevelKey) {
       this.buildBubbles(snapshot);
@@ -370,7 +350,6 @@ export class BubbleScene extends Phaser.Scene {
       this.boardGlow.setScale(1);
     }
     if (effect === 'none') {
-      this.handleAbilityEffect(update);
       return;
     }
 
@@ -415,8 +394,6 @@ export class BubbleScene extends Phaser.Scene {
       }
     }
 
-    this.handleAbilityEffect(update);
-
     if (!this.preferences.sound) return;
     if (bubbleHitEffects.includes(effect) && effectIndex !== undefined) {
       const variation = ((Math.floor(this.latestSnapshot.score / 10) + (effectIndex ?? 0)) % 3) + 1;
@@ -442,113 +419,6 @@ export class BubbleScene extends Phaser.Scene {
     if (effect === 'victory') this.playSfx('victory', 0.52);
     if (['mistake', 'mistake-overflow', 'counter-miss'].includes(effect)) this.playSfx('wrong-wobble', effect === 'mistake-overflow' ? 0.48 : 0.38);
     if (effect === 'countdown') this.playSfx('countdown', 0.23);
-  }
-
-  private handleAbilityEffect(update: SessionUpdate): void {
-    if (!update.abilityEffect) return;
-    if (update.abilityEffect === 'ultimate-start') {
-      this.startUltimateScreenFx(true);
-      return;
-    }
-    if (update.abilityEffect === 'ultimate-hit') {
-      this.animateUltimateHit(update.abilityStage ?? 1);
-      return;
-    }
-    if (update.abilityEffect === 'ultimate-finish') {
-      this.animateUltimateHit(3);
-      return;
-    }
-    if (update.abilityEffect === 'ultimate-end') this.stopUltimateScreenFx(false);
-  }
-
-  private animateUltimateHit(stage: 1 | 2 | 3): void {
-    if (!this.enemy.visible) return;
-    this.ultimateVisualStage = stage;
-    this.createUltimatePulse(stage);
-    this.emitUltimateUpgradeEffects(stage);
-    if (!this.preferences.reducedMotion) {
-      if (this.latestSnapshot.enemyHp <= 0) return;
-      this.stopEnemyMotion();
-      const enemyEpoch = this.enemyMotionEpoch;
-      const offsetX = stage === 3 ? 42 : stage === 2 ? 20 : 10;
-      const offsetY = stage === 3 ? -48 : stage === 2 ? -20 : -10;
-      this.enemy
-        .clearTint()
-        .setTint(this.getEnemyTint())
-        .setDepth(9)
-        .setPosition(WIDTH / 2 + offsetX, this.enemyCenterY + offsetY)
-        .setScale(
-          this.enemyRestScaleX * (stage === 3 ? 0.82 : 0.92),
-          this.enemyRestScaleY * (stage === 3 ? 1.14 : 1.07),
-        );
-      if (stage === 3) this.cameras.main.shake(90, 0.0028);
-      this.time.delayedCall(stage === 3 ? 70 : 30, () => {
-        if (!this.enemy.active || enemyEpoch !== this.enemyMotionEpoch) return;
-        this.tweens.add({
-          targets: this.enemy,
-          x: WIDTH / 2,
-          y: this.enemyCenterY,
-          scaleX: this.enemyRestScaleX,
-          scaleY: this.enemyRestScaleY,
-          duration: stage === 3 ? 300 : 190,
-          ease: 'Back.Out',
-          onComplete: () => {
-            if (enemyEpoch !== this.enemyMotionEpoch) return;
-            if (this.latestSnapshot.enemyAttackState === 'windup') this.setEnemyWindupPose();
-            else this.restoreEnemyPose();
-          },
-        });
-      });
-    }
-  }
-
-  private createUltimatePulse(stage: 1 | 2 | 3): void {
-    const blastLevel = this.latestSnapshot.ultimateUpgradeLevels.blast;
-    const ripple = this.add.image(this.enemy.x, this.enemy.y, 'skill-tide-ripple')
-      .setDepth(29)
-      .setAlpha(stage === 3 ? 1 : 0.92)
-      .setDisplaySize(640, 640)
-      .setScale(this.preferences.reducedMotion ? 0.82 : 0.3 + stage * 0.035);
-    this.trackUltimateFx(ripple);
-    this.destroyAfterTween(ripple, {
-      scale: this.preferences.reducedMotion ? 1.05 : 1.04 + stage * 0.11 + blastLevel * 0.035,
-      alpha: 0,
-      duration: this.preferences.reducedMotion ? 220 : 620 + stage * 70,
-      ease: 'Cubic.Out',
-    });
-  }
-
-  private emitUltimateUpgradeEffects(stage: 1 | 2 | 3): void {
-    const controlLevel = this.latestSnapshot.ultimateUpgradeLevels.control;
-    if (controlLevel === 0) return;
-    const wave = this.add.image(
-      WIDTH / 2,
-      this.preferences.reducedMotion ? this.enemyCenterY + 210 : HEIGHT + 330,
-      'skill-control-wave',
-    )
-      .setDisplaySize(WIDTH * 1.55 * (stage === 3 ? 1.06 : 1), 880 * (stage === 3 ? 1.06 : 1))
-      .setDepth(27)
-      .setAlpha(this.preferences.reducedMotion ? 0.7 : 0.94);
-    const impactScaleX = wave.scaleX * (stage === 3 ? 1.1 : 1.06);
-    const impactScaleY = wave.scaleY * (stage === 3 ? 1.1 : 1.06);
-    this.trackUltimateFx(wave);
-    if (this.preferences.reducedMotion) {
-      this.destroyAfterTween(wave, { alpha: 0, duration: 260, ease: 'Sine.In' });
-      return;
-    }
-    this.tweens.add({
-      targets: wave,
-      y: this.enemyCenterY + 95,
-      duration: 560 - controlLevel * 35,
-      ease: 'Cubic.Out',
-      onComplete: () => this.destroyAfterTween(wave, {
-        alpha: 0,
-        scaleX: impactScaleX,
-        scaleY: impactScaleY,
-        duration: 220,
-        ease: 'Cubic.Out',
-      }),
-    });
   }
 
   private animateCorrectAt(index: number, large: boolean): void {
@@ -912,62 +782,6 @@ export class BubbleScene extends Phaser.Scene {
     }
   }
 
-  private syncUltimateVisual(snapshot: SessionSnapshot, abilityEffect?: SessionUpdate['abilityEffect']): void {
-    if (snapshot.ultimateActive && !this.ultimateScreenVisual && abilityEffect !== 'ultimate-start') {
-      this.startUltimateScreenFx(false);
-    } else if (!snapshot.ultimateActive && this.ultimateScreenVisual && abilityEffect !== 'ultimate-end') {
-      this.stopUltimateScreenFx(true);
-    }
-  }
-
-  private hideUltimateVisuals(): void {
-    this.ultimateScreenVisual = false;
-    this.ultimateVisualStage = 0;
-    this.clearUltimateFx();
-  }
-
-  private startUltimateScreenFx(withEntrance: boolean): void {
-    this.ultimateScreenVisual = true;
-    this.ultimateVisualStage = 0;
-    if (this.latestSnapshot.ultimateUpgradeLevels.shield > 0) this.emitShieldBubbles(withEntrance);
-  }
-
-  private stopUltimateScreenFx(_immediate: boolean): void {
-    this.ultimateScreenVisual = false;
-    this.ultimateVisualStage = 0;
-    this.clearUltimateFx();
-  }
-
-  private emitShieldBubbles(withEntrance: boolean): void {
-    const count = this.preferences.reducedMotion ? 1 : 2;
-    for (let index = 0; index < count; index += 1) {
-      const bubbles = this.add.image(index === 0 ? 250 : 470, this.preferences.reducedMotion ? 720 : 1450 + index * 130, 'skill-shield-bubbles')
-        .setDisplaySize(480, 1218)
-        .setDepth(30)
-        .setFlipX(index === 1)
-        .setAlpha(this.preferences.reducedMotion ? 0.66 : 0);
-      this.trackUltimateFx(bubbles);
-      if (this.preferences.reducedMotion) {
-        this.destroyAfterTween(bubbles, { alpha: 0, duration: 280, delay: 120, ease: 'Sine.In' });
-        continue;
-      }
-      this.tweens.add({
-        targets: bubbles,
-        y: bubbles.y - 180,
-        alpha: 0.78,
-        duration: 190,
-        delay: withEntrance ? index * 110 : 0,
-        ease: 'Cubic.Out',
-        onComplete: () => this.destroyAfterTween(bubbles, {
-          y: -80 - index * 90,
-          alpha: 0,
-          duration: 1750 + index * 180,
-          ease: 'Sine.Out',
-        }),
-      });
-    }
-  }
-
   private animateEnemyHit(damage: number, defeated: boolean, showDamageText = true): void {
     if (!this.enemy.visible) return;
     if (!this.preferences.reducedMotion) {
@@ -1248,46 +1062,8 @@ export class BubbleScene extends Phaser.Scene {
 
   private destroyTransient(target: Phaser.GameObjects.GameObject): void {
     this.transientEffects.delete(target);
-    this.ultimateFxObjects.delete(target);
     if (target === this.combatText) this.combatText = undefined;
     target.destroy();
-  }
-
-  private trackUltimateFx(effect: Phaser.GameObjects.Image): void {
-    this.ultimateFxObjects.add(effect);
-    this.transientEffects.add(effect);
-  }
-
-  private countUltimateFx(textureKey: string): number {
-    return [...this.ultimateFxObjects].filter((effect) => (
-      effect.active
-      && effect instanceof Phaser.GameObjects.Image
-      && effect.texture.key === textureKey
-    )).length;
-  }
-
-  private describeUltimateFx(textureKey: string): { x: number; y: number; width: number; height: number } | null {
-    const effect = [...this.ultimateFxObjects].find((candidate) => (
-      candidate.active
-      && candidate instanceof Phaser.GameObjects.Image
-      && candidate.texture.key === textureKey
-    ));
-    if (!(effect instanceof Phaser.GameObjects.Image)) return null;
-    return {
-      x: Math.round(effect.x),
-      y: Math.round(effect.y),
-      width: Math.round(effect.displayWidth),
-      height: Math.round(effect.displayHeight),
-    };
-  }
-
-  private clearUltimateFx(): void {
-    for (const effect of this.ultimateFxObjects) {
-      this.tweens.killTweensOf(effect);
-      this.transientEffects.delete(effect);
-      effect.destroy();
-    }
-    this.ultimateFxObjects.clear();
   }
 
   private syncAudio(): void {
@@ -1360,7 +1136,6 @@ export class BubbleScene extends Phaser.Scene {
       effect.destroy();
     }
     this.transientEffects.clear();
-    this.ultimateFxObjects.clear();
     this.combatText = undefined;
   }
 

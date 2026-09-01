@@ -131,7 +131,7 @@ assert.equal(await page.locator('#battle-value, #enemy-attack-damage, #score-val
 assert.equal(await page.locator('#timer-fill, #time-value, #mode-name, .mode-pill, .objective-chip, #play-prompt, #target-counter').count(), 0,
   '倒计时、模式名称和文字操作提示应全部移除');
 assert.equal(await page.locator('#player-shield-value, #player-energy-value').count(), 2);
-assert.equal(await page.locator('#player-energy-value').textContent(), '点怪物');
+assert.equal(await page.locator('#player-energy-value').textContent(), '100%');
 assert.equal(await page.locator('#target-bubbles > i').count(), state.remainingTargets);
 const playerHudBox = await page.locator('.player-status').boundingBox();
 const enemyHudBox = await page.locator('#enemy-status').boundingBox();
@@ -231,70 +231,6 @@ assert.equal(await refreshPage.locator('#target-bubbles > i').count(), refreshSt
   '换盘后可消耗泡泡应按新目标数重置');
 await refreshPage.close();
 
-const ultimatePage = await context.newPage();
-ultimatePage.on('pageerror', (error) => errors.push(`ultimate pageerror: ${error.message}`));
-ultimatePage.on('console', (message) => {
-  if (message.type() === 'error') errors.push(`ultimate console: ${message.text()}`);
-});
-await ultimatePage.goto(`${BASE_URL}?seed=2654435761`, { waitUntil: 'networkidle' });
-await ultimatePage.waitForFunction(() => typeof window.render_game_to_text === 'function');
-await ultimatePage.locator('#start-game').tap();
-let ultimateState = await chargeUltimateReady(ultimatePage);
-assert.equal(ultimateState.battle.player.ultimate.energy, 100);
-assert.equal(ultimateState.battle.player.ultimate.ready, true);
-assert.equal(ultimateState.feedback.ultimate.screenFxVisible, false, '满能量待释放时怪物周围不应显示技能素材');
-assert.equal(await ultimatePage.locator('.player-meter--energy small').textContent(), '能量');
-assert.equal(await ultimatePage.locator('.player-meter--energy small img').count(), 0);
-assert.equal(await ultimatePage.locator('#player-energy-value').textContent(), '100%');
-await screenshot(ultimatePage, '02c-ultimate-ready.png');
-const ultimateCanvas = await ultimatePage.locator('#game-container canvas').boundingBox();
-assert.ok(ultimateCanvas);
-const ultimateEnemyPoint = {
-  x: ultimateCanvas.x + ultimateState.feedback.enemy.x / 720 * ultimateCanvas.width,
-  y: ultimateCanvas.y + ultimateState.feedback.enemy.y / 1280 * ultimateCanvas.height,
-};
-const attackProgressBeforeUltimate = ultimateState.battle.enemy.attackProgress;
-await ultimatePage.touchscreen.tap(ultimateEnemyPoint.x, ultimateEnemyPoint.y);
-await ultimatePage.waitForTimeout(120);
-ultimateState = await readState(ultimatePage);
-assert.equal(ultimateState.battle.player.ultimate.energy, 0, '真实点击怪物后应消耗全部能量');
-assert.equal(ultimateState.battle.player.ultimate.active, true, '真实点击怪物后应启动泡泡海啸');
-assert.equal(ultimateState.feedback.ultimate.screenFxVisible, false, '释放时不应再铺旧的全屏海啸底图');
-assert.equal(await ultimatePage.locator('#enemy-attack-label').textContent(), '海啸压制');
-await screenshot(ultimatePage, '02d-ultimate-active.png');
-await ultimatePage.evaluate(() => window.advanceTime(700));
-ultimateState = await readState(ultimatePage);
-assert.equal(ultimateState.battle.enemy.attackProgress, attackProgressBeforeUltimate,
-  '泡泡海啸期间怪物攻击蓄力应冻结');
-for (let stage = 1; stage <= 3; stage += 1) {
-  if (ultimateState.phase === 'transition') {
-    await ultimatePage.evaluate(() => window.advanceTime(420));
-    ultimateState = await readState(ultimatePage);
-  }
-  const target = ultimateState.bubbles.find((bubble) => bubble.isTarget && !bubble.cleared);
-  assert.ok(target, `海啸第 ${stage} 段应有可点击目标`);
-  await tapBubble(ultimatePage, ultimateState, target.index);
-  await ultimatePage.waitForTimeout(stage === 3 ? 80 : 30);
-  ultimateState = await readState(ultimatePage);
-  assert.equal(ultimateState.feedback.ultimate.rippleVisible, true, `海啸第 ${stage} 段应在怪物中心显示水波纹`);
-  if (stage < 3) assert.equal(ultimateState.battle.player.ultimate.stage, stage, `海啸应进入第 ${stage} 段`);
-  else assert.ok(ultimateState.battle.player.ultimate.stage === 3
-      || (ultimateState.phase === 'transition' && ultimateState.feedback.ultimate.rippleVisible),
-    '海啸第三段即使同时结束战斗也必须保留终结反馈');
-}
-if (ultimateState.phase === 'playing') {
-  assert.equal(ultimateState.battle.enemy.mechanicState, 'staggered', '海啸第三段应强制破势');
-}
-assert.equal(ultimateState.feedback.ultimate.rippleVisible, true, '海啸终结段仍应保留怪物中心水波纹');
-assert.equal(ultimateState.feedback.ultimate.visualStage, 3, '海啸终结段视觉应进入第三阶段');
-await screenshot(ultimatePage, '02e-ultimate-finisher.png');
-if (ultimateState.phase === 'transition' && ultimateState.battle.enemy.hp === 0) {
-  await ultimatePage.waitForTimeout(500);
-  ultimateState = await readState(ultimatePage);
-  assert.ok(ultimateState.feedback.enemy.alpha <= 0.05, '海啸终结击杀后怪物必须正常退场');
-}
-await ultimatePage.close();
-
 const firstTarget = state.bubbles.find((bubble) => bubble.isTarget);
 assert.ok(firstTarget);
 await tapBubble(page, state, firstTarget.index);
@@ -313,7 +249,7 @@ assert.ok(combatTextScreenY > enemyHudBox.y + enemyHudBox.height && combatTextSc
 assert.ok(state.feedback.transformedBubbles.every((bubble) => bubble.index === firstTarget.index),
   '正确点击期间只有被点击泡泡可以产生形变');
 assert.equal(await page.locator('#player-energy-value').textContent(), state.battle.player.ultimate.ready
-  ? '点怪物'
+  ? '100%'
   : `${Math.round(state.battle.player.ultimate.energy / state.battle.player.ultimate.maxEnergy * 100)}%`);
 assert.equal(await page.locator('#target-bubbles > i').count(), state.remainingTargets, '正确点击后可消耗泡泡应减少一个');
 await screenshot(page, '02b-isolated-bubble-pop.png');
@@ -763,40 +699,6 @@ async function progressUntil(targetPage, predicate) {
   throw new Error('Progress guard exhausted');
 }
 
-async function chargeUltimateReady(targetPage) {
-  for (let guard = 0; guard < 80; guard += 1) {
-    let snapshot = await readState(targetPage);
-    if (snapshot.phase === 'transition') {
-      await targetPage.evaluate(() => window.advanceTime(420));
-      continue;
-    }
-    if (snapshot.phase !== 'playing') throw new Error(`Ultimate charge reached unexpected phase ${snapshot.phase}`);
-    if (snapshot.battle.player.ultimate.ready) {
-      await targetPage.waitForTimeout(80);
-      return readState(targetPage);
-    }
-    if (snapshot.battle.enemy.mechanicState === 'active') {
-      if (['sequence', 'capture', 'shell'].includes(snapshot.battle.enemy.mechanic)) {
-        await targetPage.evaluate((index) => window.selectBubble(index),
-          snapshot.battle.enemy.intentTargets[snapshot.battle.enemy.intentCursor]);
-        continue;
-      }
-      if (snapshot.battle.enemy.mechanic === 'guard') {
-        await targetPage.evaluate(() => window.advanceTime(900));
-        continue;
-      }
-      const safeTarget = snapshot.bubbles.find((bubble) => bubble.isTarget && !bubble.cleared
-        && bubble.row !== snapshot.battle.enemy.hazardRow);
-      assert.ok(safeTarget);
-      await targetPage.evaluate((index) => window.selectBubble(index), safeTarget.index);
-      continue;
-    }
-    const target = snapshot.bubbles.find((bubble) => bubble.isTarget && !bubble.cleared);
-    assert.ok(target);
-    await targetPage.evaluate((index) => window.selectBubble(index), target.index);
-  }
-  throw new Error('Ultimate charge guard exhausted');
-}
 
 async function tapBubble(targetPage, snapshot, index) {
   const bubble = snapshot.bubbles[index];
